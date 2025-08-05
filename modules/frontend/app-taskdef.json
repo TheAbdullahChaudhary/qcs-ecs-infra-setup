@@ -4,15 +4,23 @@
     "image": "941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-frontend:latest",
     "essential": true,
     "portMappings": [
-      { "containerPort": 80 }
+      { "containerPort": 80, "protocol": "tcp" }
     ],
     "logConfiguration": {
       "logDriver": "awslogs",
       "options": {
         "awslogs-group": "/ecs/frontend",
         "awslogs-region": "us-east-1",
-        "awslogs-stream-prefix": "ecs"
+        "awslogs-stream-prefix": "ecs",
+        "awslogs-create-group": "true"
       }
+    },
+    "healthCheck": {
+      "command": ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"],
+      "interval": 30,
+      "timeout": 5,
+      "retries": 3,
+      "startPeriod": 60
     }
   }
 ]

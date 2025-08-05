@@ -9,6 +9,7 @@
     "environment": [
       { "name": "PORT", "value": "4000" },
       { "name": "NODE_ENV", "value": "production" },
+      { "name": "POSTGRES_HOST", "value": "${postgres_host}" },
       { "name": "POSTGRES_DB", "value": "ecsdb" },
       { "name": "POSTGRES_USER", "value": "ecsuser" },
       { "name": "POSTGRES_PASSWORD", "value": "ecspassword123!" }

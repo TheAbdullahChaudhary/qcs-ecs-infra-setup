@@ -1,0 +1,14 @@
+# Example Terraform variables file
+# Copy this to terraform.tfvars and update with your actual values
+
+# EFS subnet names (existing subnets for EFS mount targets)
+efs_subnet_names = ["ecs_vpc-private-us-east-1a", "ecs_vpc-private-us-east-1b"]
+
+# Jenkins EFS security group name (existing security group)
+jenkins_efs_sg_name = "jenkins-efs-sg"
+
+# ECS execution role name (existing IAM role)
+ecs_execution_role_name = "ecsTaskExecutionRole"
+
+# ECS task role name (existing IAM role)
+ecs_task_role_name = "ecsTaskRole"

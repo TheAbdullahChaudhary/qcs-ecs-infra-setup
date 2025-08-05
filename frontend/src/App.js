@@ -33,7 +33,7 @@ function App() {
   // Fetch todos from backend
   const fetchTodos = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/todos`);
+      const response = await fetch(`${API_BASE_URL}/todos`);
       if (!response.ok) {
         throw new Error('Failed to fetch todos');
       }
@@ -53,7 +53,7 @@ function App() {
     if (!newTodo.trim()) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/todos`, {
+      const response = await fetch(`${API_BASE_URL}/todos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,7 +76,7 @@ function App() {
   // Toggle todo completion
   const toggleTodo = async (id, completed) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/todos/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -99,7 +99,7 @@ function App() {
   // Delete todo
   const deleteTodo = async (id) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/todos/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
         method: 'DELETE',
       });
 
