@@ -47,6 +47,75 @@ const Todo = sequelize.define('Todo', {
   timestamps: true
 });
 
+
+// Health check endpoints
+app.get('/health', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: {
+          status: 'connected',
+          host: process.env.POSTGRES_HOST || "db",
+          database: process.env.POSTGRES_DB || "ecsdb"
+        },
+        api: {
+          status: 'running',
+          port: port,
+          environment: process.env.NODE_ENV || 'development'
+        }
+      }
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: {
+          status: 'disconnected',
+          error: error.message,
+          host: process.env.POSTGRES_HOST || "db"
+        },
+        api: {
+          status: 'running',
+          port: port
+        }
+      }
+    });
+  }
+});
+
+// Detailed database status
+app.get('/health/database', async (req, res) => {
+  try {
+    const dbStart = Date.now();
+    await sequelize.authenticate();
+    const dbEnd = Date.now();
+
+    res.status(200).json({
+      status: 'connected',
+      responseTime: `${dbEnd - dbStart}ms`,
+      details: {
+        host: process.env.POSTGRES_HOST || "db",
+        database: process.env.POSTGRES_DB || "ecsdb",
+        user: process.env.POSTGRES_USER || "ecsuser",
+        maxConnections: sequelize.config.pool.max
+      }
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'disconnected',
+      error: error.message,
+      details: {
+        host: process.env.POSTGRES_HOST || "db",
+        database: process.env.POSTGRES_DB || "ecsdb"
+      }
+    });
+  }
+});
+
 // Database initialization
 async function initializeDatabase() {
   try {

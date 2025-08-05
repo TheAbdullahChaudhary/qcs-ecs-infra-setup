@@ -6,8 +6,29 @@ function App() {
   const [newTodo, setNewTodo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('Checking connection...');
 
-  const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:4000";
+  // Use /api path for backend requests
+  const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
+
+  // Check backend connection
+  const checkConnection = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setConnectionStatus(`Connected to backend (DB: ${data.services.database.status})`);
+        setError(null);
+      } else {
+        setConnectionStatus('Backend error');
+        setError(`Backend service error: ${data.services?.database?.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      setConnectionStatus('Connection failed');
+      setError(`Cannot connect to backend: ${err.message}`);
+    }
+  };
 
   // Fetch todos from backend
   const fetchTodos = async () => {
@@ -19,8 +40,9 @@ function App() {
       const data = await response.json();
       setTodos(data);
       setLoading(false);
+      setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(`Error fetching todos: ${err.message}`);
       setLoading(false);
     }
   };
@@ -92,15 +114,15 @@ function App() {
   };
 
   useEffect(() => {
+    checkConnection();
     fetchTodos();
+    // Check connection every 30 seconds
+    const interval = setInterval(checkConnection, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
     return <div className="App">Loading todos...</div>;
-  }
-
-  if (error) {
-    return <div className="App error">Error: {error}</div>;
   }
 
   return (
@@ -108,7 +130,17 @@ function App() {
       <header className="App-header">
         <h1>Todo App</h1>
         <p>Built with React + Node.js + PostgreSQL on ECS</p>
+        <div className={`connection-status ${connectionStatus.toLowerCase().replace(' ', '-')}`}>
+          {connectionStatus}
+        </div>
       </header>
+
+      {error && (
+        <div className="error">
+          <h3>Error</h3>
+          <p>{error}</p>
+        </div>
+      )}
 
       <main>
         <form onSubmit={addTodo} className="todo-form">
