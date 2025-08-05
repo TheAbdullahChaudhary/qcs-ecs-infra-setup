@@ -1,193 +1,211 @@
-# Todo App - 3-Tier Architecture on AWS ECS
+# 3-Tier Todo Application on AWS ECS
 
-A modern Todo application built with React, Node.js, and PostgreSQL, deployed on AWS ECS with Jenkins CI/CD pipeline.
+A complete 3-tier web application deployed on AWS ECS with the following architecture:
 
-## 🏗️ Architecture
+- **Frontend**: React.js application served by nginx, accessible via Application Load Balancer (ALB)
+- **Backend**: Node.js/Express API with health monitoring
+- **Database**: PostgreSQL on Amazon RDS with credentials stored in AWS Secrets Manager
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React App     │    │   Node.js API   │    │   PostgreSQL    │
-│   (Frontend)    │◄──►│   (Backend)     │◄──►│   (Database)    │
-│   Port: 80      │    │   Port: 4000    │    │   Port: 5432    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-## ✨ Features
-
-### Frontend (React)
-- ✅ Add new todos
-- ✅ Mark todos as complete/incomplete
-- ✅ Delete todos
-- ✅ Real-time updates
-- ✅ Modern, responsive UI
-- ✅ Error handling
-
-### Backend (Node.js + Express)
-- ✅ RESTful API
-- ✅ PostgreSQL database integration
-- ✅ CORS enabled
-- ✅ Input validation
-- ✅ Error handling
-- ✅ Health check endpoint
-
-### Database (PostgreSQL)
-- ✅ Todo items with text and completion status
-- ✅ Automatic timestamps
-- ✅ Data persistence
-
-## 🚀 Quick Start (Local Development)
-
-### Prerequisites
-- Docker and Docker Compose
-- Node.js (for local development)
-
-### Running Locally
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd 3-tier-app
-   ```
-
-2. **Start all services**
-   ```bash
-   cd backend
-   docker-compose up --build
-   ```
-
-3. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:4000
-   - Health Check: http://localhost:4000/api/health
-
-## 🏗️ Infrastructure (AWS ECS)
-
-### Components
-- **VPC**: Custom VPC with public/private subnets
-- **ECS Cluster**: EC2 launch type for applications, Fargate for Jenkins
-- **EFS**: Persistent storage for Jenkins
-- **ECR**: Docker image repositories
-- **Jenkins**: CI/CD pipeline on Fargate
-- **Security Groups**: Network isolation
-
-### Deployment
-1. **Apply Terraform**
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-2. **Build and deploy via Jenkins**
-   - Jenkins will automatically build Docker images
-   - Push images to ECR
-   - Deploy to ECS services
-
-## 📁 Project Structure
+## Architecture Overview
 
 ```
-3-tier-app/
-├── frontend/                 # React Todo App
-│   ├── src/
-│   │   ├── App.js           # Main React component
-│   │   └── App.css          # Styles
-│   ├── public/
-│   ├── package.json
-│   └── Dockerfile
-├── backend/                  # Node.js API
-│   ├── index.js             # Express server
-│   ├── package.json
-│   ├── Dockerfile
-│   └── docker-compose.yml   # Local development
-├── jenkins/                  # CI/CD
-│   ├── Dockerfile
-│   └── Jenkinsfile
-├── modules/                  # Terraform modules
-│   ├── vpc/
-│   ├── ecs-cluster/
-│   ├── efs/
-│   ├── jenkins/
-│   ├── frontend/
-│   └── backend/
-├── main.tf                   # Root Terraform
-├── variables.tf
-└── README.md
+Internet → ALB → Frontend (ECS) ─┐
+                                 ├─ Backend (ECS) → RDS PostgreSQL
+                                 └─ /api/* requests
 ```
 
-## 🔧 API Endpoints
+## Features
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/todos` | Get all todos |
-| POST | `/api/todos` | Create new todo |
-| GET | `/api/todos/:id` | Get single todo |
-| PATCH | `/api/todos/:id` | Update todo |
-| DELETE | `/api/todos/:id` | Delete todo |
+- ✅ Frontend accessible via ALB
+- ✅ Backend API with health endpoints
+- ✅ PostgreSQL database on RDS
+- ✅ Database credentials in AWS Secrets Manager
+- ✅ Real-time status monitoring for backend and database
+- ✅ Auto-scaling ECS services
+- ✅ Private subnet deployment for security
 
-### Example API Usage
+## Prerequisites
+
+1. AWS CLI configured with appropriate permissions
+2. Terraform >= 1.0
+3. Docker (for building images)
+4. AWS ECR repositories created for frontend and backend images
+
+## Required AWS Permissions
+
+Your AWS user/role needs permissions for:
+- ECS (tasks, services, clusters)
+- EC2 (VPC, subnets, security groups, ALB)
+- RDS (PostgreSQL instance)
+- Secrets Manager
+- IAM (roles and policies)
+- CloudWatch Logs
+
+## Deployment Steps
+
+### 1. Build and Push Docker Images
+
+First, build and push your Docker images to ECR:
 
 ```bash
-# Get all todos
-curl http://localhost:4000/api/todos
+# Get ECR login
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 941377128979.dkr.ecr.us-east-1.amazonaws.com
 
-# Create a todo
-curl -X POST http://localhost:4000/api/todos \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Buy groceries"}'
+# Build and push backend
+cd backend
+docker build -t ecs-backend .
+docker tag ecs-backend:latest 941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-backend:latest
+docker push 941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-backend:latest
 
-# Update a todo
-curl -X PATCH http://localhost:4000/api/todos/1 \
-  -H "Content-Type: application/json" \
-  -d '{"completed": true}'
-
-# Delete a todo
-curl -X DELETE http://localhost:4000/api/todos/1
+# Build and push frontend
+cd ../frontend
+docker build -t ecs-frontend .
+docker tag ecs-frontend:latest 941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-frontend:latest
+docker push 941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-frontend:latest
 ```
 
-## 🐳 Docker Images
+### 2. Deploy Infrastructure
 
-- **Frontend**: React app served by Nginx
-- **Backend**: Node.js Express API
-- **Database**: PostgreSQL (local development)
-- **Jenkins**: Jenkins with Docker and AWS CLI
+```bash
+# Initialize Terraform
+terraform init
 
-## 🔒 Security
+# Plan the deployment
+terraform plan
 
-- All services run in private subnets
-- Security groups control network access
-- IAM roles for service permissions
-- EFS encryption for Jenkins persistence
+# Apply the infrastructure
+terraform apply
+```
 
-## 📊 Monitoring
+### 3. Access the Application
 
-- CloudWatch logs for all containers
-- Health check endpoints
-- Error handling and logging
+After deployment, Terraform will output the ALB DNS name:
 
-## 🚀 CI/CD Pipeline
+```bash
+# Get the ALB DNS name
+terraform output alb_dns_name
+```
 
-1. **Code Push** → Jenkins detects changes
-2. **Build** → Docker images for frontend/backend
-3. **Push** → Images pushed to ECR
-4. **Deploy** → ECS services updated with new images
+Access your application at: `http://<alb-dns-name>`
 
-## 🛠️ Development
+## Application Features
 
-### Adding Features
-1. Update frontend React components
-2. Add backend API endpoints
-3. Update database schema if needed
-4. Test locally with Docker Compose
-5. Push to trigger CI/CD pipeline
+### Frontend
+- Todo list interface
+- Real-time backend and database status monitoring
+- Responsive design
+- Error handling and user feedback
+
+### Backend API Endpoints
+
+- `GET /api/health` - Backend and database health check
+- `GET /health` - Detailed service status
+- `GET /health/database` - Detailed database status
+- `GET /api/todos` - Get all todos
+- `POST /api/todos` - Create new todo
+- `PATCH /api/todos/:id` - Update todo
+- `DELETE /api/todos/:id` - Delete todo
+
+### Database
+- PostgreSQL 15.4 on RDS
+- Automatic backups
+- Encrypted storage
+- Credentials stored in AWS Secrets Manager
+
+## Configuration
 
 ### Environment Variables
-- `POSTGRES_HOST`: Database host
-- `POSTGRES_DB`: Database name
-- `POSTGRES_USER`: Database user
-- `POSTGRES_PASSWORD`: Database password
-- `REACT_APP_API_URL`: Backend API URL
 
-## 📝 License
+The application uses the following environment variables:
 
-This project is for educational purposes and demonstrates a complete 3-tier application deployment on AWS ECS. 
+**Backend:**
+- `DB_SECRET_NAME`: Name of the secret in AWS Secrets Manager (default: `ecs-app-db-credentials`)
+- `AWS_REGION`: AWS region (default: `us-east-1`)
+- `PORT`: Server port (default: `4000`)
+- `NODE_ENV`: Environment (default: `production`)
+
+**Frontend:**
+- `REACT_APP_API_URL`: Backend API URL (handled by ALB routing)
+
+### AWS Secrets Manager
+
+Database credentials are stored in AWS Secrets Manager with the following structure:
+
+```json
+{
+  "username": "ecsuser",
+  "password": "<generated-password>",
+  "host": "<rds-endpoint>",
+  "port": 5432,
+  "dbname": "ecsdb"
+}
+```
+
+## Monitoring
+
+The application includes comprehensive health monitoring:
+
+1. **Frontend Status Dashboard**: Real-time display of backend and database status
+2. **Health Endpoints**: Multiple endpoints for different types of health checks
+3. **CloudWatch Logs**: All container logs are sent to CloudWatch
+
+## Security
+
+- All services run in private subnets
+- RDS is only accessible from backend services
+- Database credentials are stored in AWS Secrets Manager
+- Security groups follow least privilege principle
+- All traffic is encrypted in transit
+
+## Scaling
+
+The application is configured for auto-scaling:
+- ECS services with desired count of 2
+- Auto Scaling Group for EC2 instances
+- RDS with storage auto-scaling
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Issues**
+   - Check Secrets Manager permissions
+   - Verify RDS security group allows backend access
+   - Check CloudWatch logs for detailed error messages
+
+2. **ALB Health Check Failures**
+   - Ensure containers are listening on correct ports
+   - Check security group configurations
+   - Verify health check paths are correct
+
+3. **Service Discovery Issues**
+   - Ensure all services are in the same VPC
+   - Check route tables and NAT gateway configuration
+
+### Logs
+
+View application logs in CloudWatch:
+- Frontend logs: `/ecs/frontend`
+- Backend logs: `/ecs/backend`
+
+## Cleanup
+
+To destroy all resources:
+
+```bash
+terraform destroy
+```
+
+**Note**: This will delete all data including the RDS database. Make sure to backup any important data before destroying.
+
+## Cost Optimization
+
+For development/testing:
+- Use `db.t3.micro` for RDS (included in free tier)
+- Use `t3.small` EC2 instances
+- Set desired count to 1 for ECS services
+
+For production:
+- Scale up RDS instance class as needed
+- Increase ECS service desired count
+- Enable RDS Multi-AZ for high availability 
