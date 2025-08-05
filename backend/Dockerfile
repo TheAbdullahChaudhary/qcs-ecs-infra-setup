@@ -5,14 +5,12 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Generate package-lock.json if it doesn't exist, then install dependencies
+RUN [ -f package-lock.json ] || npm install && npm install --package-lock-only && npm ci --omit=dev
 
 # Copy source code
 COPY . .
 
-# Expose port 4000
 EXPOSE 4000
 
-# Start the application
 CMD ["node", "index.js"]
