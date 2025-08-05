@@ -1,0 +1,50 @@
+pipeline {
+  agent {
+    docker {
+      image 'theabdullahchaudhary/jenkins-agent-with-tools'
+      args '-v /var/run/docker.sock:/var/run/docker.sock' // for Docker-in-Docker
+    }
+  }
+  environment {
+    AWS_REGION = 'us-east-1'
+    ECR_FRONTEND = '941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-frontend'
+    ECR_BACKEND = '941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-backend'
+    ECS_CLUSTER = '3-tier-ecs-cluster'
+  }
+  stages {
+    stage('Build Frontend') {
+      steps {
+        dir('frontend') {
+          sh 'docker build -t ecs-frontend .'
+        }
+      }
+    }
+    stage('Build Backend') {
+      steps {
+        dir('backend') {
+          sh 'docker build -t ecs-backend .'
+        }
+      }
+    }
+    stage('Push to ECR') {
+      steps {
+        sh '''
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_FRONTEND
+        docker tag ecs-frontend:latest $ECR_FRONTEND:latest
+        docker push $ECR_FRONTEND:latest
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_BACKEND
+        docker tag ecs-backend:latest $ECR_BACKEND:latest
+        docker push $ECR_BACKEND:latest
+        '''
+      }
+    }
+    stage('Deploy to ECS') {
+      steps {
+        sh '''
+        aws ecs update-service --cluster $ECS_CLUSTER --service frontend --force-new-deployment --region $AWS_REGION
+        aws ecs update-service --cluster $ECS_CLUSTER --service backend --force-new-deployment --region $AWS_REGION
+        '''
+      }
+    }
+  }
+}

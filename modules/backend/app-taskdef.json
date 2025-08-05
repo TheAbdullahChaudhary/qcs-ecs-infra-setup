@@ -1,0 +1,24 @@
+[
+  {
+    "name": "backend",
+    "image": "941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-backend:latest",
+    "essential": true,
+    "portMappings": [
+      { "containerPort": 4000 }
+    ],
+    "environment": [
+      { "name": "POSTGRES_HOST", "value": "<RDS_ENDPOINT_OR_DB_CONTAINER>" },
+      { "name": "POSTGRES_DB", "value": "ecsdb" },
+      { "name": "POSTGRES_USER", "value": "ecsuser" },
+      { "name": "POSTGRES_PASSWORD", "value": "ecspassword" }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/backend",
+        "awslogs-region": "us-east-1",
+        "awslogs-stream-prefix": "ecs"
+      }
+    }
+  }
+]
