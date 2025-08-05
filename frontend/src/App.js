@@ -6,27 +6,80 @@ function App() {
   const [newTodo, setNewTodo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('Checking connection...');
+  const [backendStatus, setBackendStatus] = useState({
+    status: 'checking',
+    message: 'Checking backend connection...',
+    database: { status: 'unknown' }
+  });
+  const [databaseStatus, setDatabaseStatus] = useState({
+    status: 'checking',
+    message: 'Checking database connection...',
+    details: {}
+  });
 
-  // Use /api path for backend requests
-  const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
+  // Use environment variable or default to relative path for ALB
+  const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
-  // Check backend connection
-  const checkConnection = async () => {
+  // Check backend connection and status
+  const checkBackendStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/health`);
+      const response = await fetch(`${API_BASE_URL}/api/health`);
       const data = await response.json();
       
       if (response.ok) {
-        setConnectionStatus(`Connected to backend (DB: ${data.services.database.status})`);
+        setBackendStatus({
+          status: 'healthy',
+          message: 'Backend is running and connected',
+          database: data.database || { status: 'unknown' },
+          timestamp: data.timestamp
+        });
         setError(null);
       } else {
-        setConnectionStatus('Backend error');
-        setError(`Backend service error: ${data.services?.database?.error || 'Unknown error'}`);
+        setBackendStatus({
+          status: 'unhealthy',
+          message: data.message || 'Backend service error',
+          database: data.database || { status: 'disconnected' },
+          error: data.error
+        });
       }
     } catch (err) {
-      setConnectionStatus('Connection failed');
-      setError(`Cannot connect to backend: ${err.message}`);
+      setBackendStatus({
+        status: 'disconnected',
+        message: 'Cannot connect to backend',
+        database: { status: 'unknown' },
+        error: err.message
+      });
+    }
+  };
+
+  // Check detailed database status
+  const checkDatabaseStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health/database`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setDatabaseStatus({
+          status: 'connected',
+          message: `Connected to PostgreSQL (${data.responseTime})`,
+          details: data.details || {},
+          responseTime: data.responseTime
+        });
+      } else {
+        setDatabaseStatus({
+          status: 'disconnected',
+          message: 'Database connection failed',
+          details: data.details || {},
+          error: data.error
+        });
+      }
+    } catch (err) {
+      setDatabaseStatus({
+        status: 'disconnected',
+        message: 'Cannot check database status',
+        details: {},
+        error: err.message
+      });
     }
   };
 
@@ -66,7 +119,7 @@ function App() {
       }
 
       const addedTodo = await response.json();
-      setTodos([...todos, addedTodo]);
+      setTodos([addedTodo, ...todos]);
       setNewTodo("");
     } catch (err) {
       setError(err.message);
@@ -114,31 +167,69 @@ function App() {
   };
 
   useEffect(() => {
-    checkConnection();
+    checkBackendStatus();
+    checkDatabaseStatus();
     fetchTodos();
-    // Check connection every 30 seconds
-    const interval = setInterval(checkConnection, 30000);
+    
+    // Check status every 30 seconds
+    const interval = setInterval(() => {
+      checkBackendStatus();
+      checkDatabaseStatus();
+    }, 30000);
+    
     return () => clearInterval(interval);
   }, []);
 
   if (loading) {
-    return <div className="App">Loading todos...</div>;
+    return (
+      <div className="App">
+        <div className="loading">Loading application...</div>
+      </div>
+    );
   }
 
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Todo App</h1>
-        <p>Built with React + Node.js + PostgreSQL on ECS</p>
-        <div className={`connection-status ${connectionStatus.toLowerCase().replace(' ', '-')}`}>
-          {connectionStatus}
+        <h1>3-Tier Todo App</h1>
+        <p>React Frontend + Node.js Backend + PostgreSQL on AWS ECS</p>
+        
+        {/* Service Status Dashboard */}
+        <div className="status-dashboard">
+          <div className={`status-card backend ${backendStatus.status}`}>
+            <h3>Backend Service</h3>
+            <div className={`status-indicator ${backendStatus.status}`}>
+              {backendStatus.status === 'healthy' ? '✅' : 
+               backendStatus.status === 'unhealthy' ? '⚠️' : 
+               backendStatus.status === 'disconnected' ? '❌' : '🔄'}
+            </div>
+            <p>{backendStatus.message}</p>
+            {backendStatus.error && <small>Error: {backendStatus.error}</small>}
+          </div>
+          
+          <div className={`status-card database ${databaseStatus.status}`}>
+            <h3>PostgreSQL Database</h3>
+            <div className={`status-indicator ${databaseStatus.status}`}>
+              {databaseStatus.status === 'connected' ? '✅' : 
+               databaseStatus.status === 'disconnected' ? '❌' : '🔄'}
+            </div>
+            <p>{databaseStatus.message}</p>
+            {databaseStatus.details.host && (
+              <small>Host: {databaseStatus.details.host}:{databaseStatus.details.port}</small>
+            )}
+            {databaseStatus.details.usingSecretsManager && (
+              <small>🔐 Using AWS Secrets Manager</small>
+            )}
+            {databaseStatus.error && <small>Error: {databaseStatus.error}</small>}
+          </div>
         </div>
       </header>
 
       {error && (
         <div className="error">
-          <h3>Error</h3>
+          <h3>Application Error</h3>
           <p>{error}</p>
+          <button onClick={() => setError(null)}>Dismiss</button>
         </div>
       )}
 
@@ -150,14 +241,24 @@ function App() {
             onChange={(e) => setNewTodo(e.target.value)}
             placeholder="Add a new todo..."
             className="todo-input"
+            disabled={backendStatus.status !== 'healthy'}
           />
-          <button type="submit" className="add-button">
+          <button 
+            type="submit" 
+            className="add-button"
+            disabled={backendStatus.status !== 'healthy'}
+          >
             Add Todo
           </button>
         </form>
 
         <div className="todo-list">
-          {todos.length === 0 ? (
+          {backendStatus.status !== 'healthy' ? (
+            <div className="service-unavailable">
+              <h3>Service Unavailable</h3>
+              <p>Please check the backend and database status above.</p>
+            </div>
+          ) : todos.length === 0 ? (
             <p className="no-todos">No todos yet. Add one above!</p>
           ) : (
             todos.map((todo) => (

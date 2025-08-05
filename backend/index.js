@@ -1,56 +1,119 @@
 const express = require("express");
 const { Sequelize, DataTypes } = require("sequelize");
 const cors = require("cors");
+const AWS = require("aws-sdk");
 require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 4000;
 
+// Configure AWS SDK
+AWS.config.update({
+  region: process.env.AWS_REGION || 'us-east-1'
+});
+
+const secretsManager = new AWS.SecretsManager();
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Database connection
-const sequelize = new Sequelize(
-  process.env.POSTGRES_DB || "ecsdb",
-  process.env.POSTGRES_USER || "ecsuser",
-  process.env.POSTGRES_PASSWORD || "ecspassword",
-  {
-    host: process.env.POSTGRES_HOST || "db",
-    dialect: "postgres",
-    logging: false,
-    pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
-    }
-  }
-);
+let sequelize;
+let Todo;
+let dbCredentials = null;
 
-// Todo Model
-const Todo = sequelize.define('Todo', {
-  id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
-  text: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  completed: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
+// Function to get database credentials from Secrets Manager
+async function getDatabaseCredentials() {
+  try {
+    const secretName = process.env.DB_SECRET_NAME || 'ecs-app-db-credentials';
+    const result = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+    const secret = JSON.parse(result.SecretString);
+    
+    dbCredentials = {
+      host: secret.host,
+      database: secret.dbname,
+      username: secret.username,
+      password: secret.password,
+      port: secret.port || 5432
+    };
+    
+    console.log('Database credentials retrieved from Secrets Manager');
+    return dbCredentials;
+  } catch (error) {
+    console.error('Error retrieving database credentials:', error);
+    // Fallback to environment variables for local development
+    dbCredentials = {
+      host: process.env.POSTGRES_HOST || "localhost",
+      database: process.env.POSTGRES_DB || "ecsdb",
+      username: process.env.POSTGRES_USER || "ecsuser",
+      password: process.env.POSTGRES_PASSWORD || "ecspassword",
+      port: process.env.POSTGRES_PORT || 5432
+    };
+    return dbCredentials;
   }
-}, {
-  timestamps: true
-});
+}
 
+// Initialize database connection
+async function initializeDatabase() {
+  try {
+    const credentials = await getDatabaseCredentials();
+    
+    sequelize = new Sequelize(
+      credentials.database,
+      credentials.username,
+      credentials.password,
+      {
+        host: credentials.host,
+        port: credentials.port,
+        dialect: "postgres",
+        logging: console.log,
+        pool: {
+          max: 5,
+          min: 0,
+          acquire: 30000,
+          idle: 10000
+        }
+      }
+    );
+
+    await sequelize.authenticate();
+    console.log('Database connection established successfully.');
+    
+    // Define Todo model after sequelize is initialized
+    Todo = sequelize.define('Todo', {
+      id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+      },
+      text: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      completed: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      }
+    }, {
+      timestamps: true
+    });
+    
+    await sequelize.sync({ force: false });
+    console.log('Database synchronized.');
+    
+    return true;
+  } catch (error) {
+    console.error('Unable to connect to the database:', error);
+    return false;
+  }
+}
 
 // Health check endpoints
 app.get('/health', async (req, res) => {
   try {
+    if (!sequelize) {
+      throw new Error('Database not initialized');
+    }
     await sequelize.authenticate();
     res.status(200).json({
       status: 'healthy',
@@ -58,8 +121,9 @@ app.get('/health', async (req, res) => {
       services: {
         database: {
           status: 'connected',
-          host: process.env.POSTGRES_HOST || "db",
-          database: process.env.POSTGRES_DB || "ecsdb"
+          host: dbCredentials?.host || 'unknown',
+          database: dbCredentials?.database || 'unknown',
+          responseTime: '< 100ms'
         },
         api: {
           status: 'running',
@@ -76,7 +140,7 @@ app.get('/health', async (req, res) => {
         database: {
           status: 'disconnected',
           error: error.message,
-          host: process.env.POSTGRES_HOST || "db"
+          host: dbCredentials?.host || 'unknown'
         },
         api: {
           status: 'running',
@@ -90,6 +154,10 @@ app.get('/health', async (req, res) => {
 // Detailed database status
 app.get('/health/database', async (req, res) => {
   try {
+    if (!sequelize) {
+      throw new Error('Database not initialized');
+    }
+    
     const dbStart = Date.now();
     await sequelize.authenticate();
     const dbEnd = Date.now();
@@ -98,10 +166,12 @@ app.get('/health/database', async (req, res) => {
       status: 'connected',
       responseTime: `${dbEnd - dbStart}ms`,
       details: {
-        host: process.env.POSTGRES_HOST || "db",
-        database: process.env.POSTGRES_DB || "ecsdb",
-        user: process.env.POSTGRES_USER || "ecsuser",
-        maxConnections: sequelize.config.pool.max
+        host: dbCredentials?.host || 'unknown',
+        database: dbCredentials?.database || 'unknown',
+        username: dbCredentials?.username || 'unknown',
+        port: dbCredentials?.port || 5432,
+        maxConnections: sequelize.config.pool.max,
+        usingSecretsManager: !!process.env.DB_SECRET_NAME
       }
     });
   } catch (error) {
@@ -109,52 +179,52 @@ app.get('/health/database', async (req, res) => {
       status: 'disconnected',
       error: error.message,
       details: {
-        host: process.env.POSTGRES_HOST || "db",
-        database: process.env.POSTGRES_DB || "ecsdb"
+        host: dbCredentials?.host || 'unknown',
+        database: dbCredentials?.database || 'unknown',
+        usingSecretsManager: !!process.env.DB_SECRET_NAME
       }
     });
   }
 });
 
-// Database initialization
-async function initializeDatabase() {
-  try {
-    await sequelize.authenticate();
-    console.log('Database connection established successfully.');
-    
-    await sequelize.sync({ force: false }); // Don't force recreate tables
-    console.log('Database synchronized.');
-  } catch (error) {
-    console.error('Unable to connect to the database:', error);
-  }
-}
-
-// Initialize database
-initializeDatabase();
-
-// Routes
-
-// Health check
+// API Health check
 app.get("/api/health", async (req, res) => {
   try {
+    if (!sequelize) {
+      throw new Error('Database not initialized');
+    }
     await sequelize.authenticate();
     res.json({ 
       status: "healthy", 
       message: "Backend is running and connected to database",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      database: {
+        status: "connected",
+        host: dbCredentials?.host || 'unknown',
+        database: dbCredentials?.database || 'unknown'
+      }
     });
   } catch (error) {
     res.status(500).json({ 
       status: "unhealthy", 
       message: "Database connection failed", 
-      error: error.message 
+      error: error.message,
+      database: {
+        status: "disconnected",
+        host: dbCredentials?.host || 'unknown'
+      }
     });
   }
 });
 
+// Routes
+
 // Get all todos
 app.get("/api/todos", async (req, res) => {
   try {
+    if (!Todo) {
+      throw new Error('Database not initialized');
+    }
     const todos = await Todo.findAll({
       order: [['createdAt', 'DESC']]
     });
@@ -168,6 +238,10 @@ app.get("/api/todos", async (req, res) => {
 // Create new todo
 app.post("/api/todos", async (req, res) => {
   try {
+    if (!Todo) {
+      throw new Error('Database not initialized');
+    }
+    
     const { text } = req.body;
     
     if (!text || text.trim() === '') {
@@ -189,6 +263,10 @@ app.post("/api/todos", async (req, res) => {
 // Update todo
 app.patch("/api/todos/:id", async (req, res) => {
   try {
+    if (!Todo) {
+      throw new Error('Database not initialized');
+    }
+    
     const { id } = req.params;
     const { text, completed } = req.body;
 
@@ -217,6 +295,10 @@ app.patch("/api/todos/:id", async (req, res) => {
 // Delete todo
 app.delete("/api/todos/:id", async (req, res) => {
   try {
+    if (!Todo) {
+      throw new Error('Database not initialized');
+    }
+    
     const { id } = req.params;
     
     const todo = await Todo.findByPk(id);
@@ -236,6 +318,10 @@ app.delete("/api/todos/:id", async (req, res) => {
 // Get single todo
 app.get("/api/todos/:id", async (req, res) => {
   try {
+    if (!Todo) {
+      throw new Error('Database not initialized');
+    }
+    
     const { id } = req.params;
     
     const todo = await Todo.findByPk(id);
@@ -262,7 +348,16 @@ app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
-app.listen(port, () => {
-  console.log(`Todo API server listening on port ${port}`);
-  console.log(`Health check: http://localhost:${port}/api/health`);
-});
+// Start server after database initialization
+async function startServer() {
+  console.log('Starting server...');
+  const dbInitialized = await initializeDatabase();
+  
+  app.listen(port, () => {
+    console.log(`Todo API server listening on port ${port}`);
+    console.log(`Health check: http://localhost:${port}/api/health`);
+    console.log(`Database status: ${dbInitialized ? 'Connected' : 'Failed'}`);
+  });
+}
+
+startServer();

@@ -20,7 +20,73 @@
 .App-header p {
   color: rgba(255,255,255,0.9);
   font-size: 1.1rem;
-  margin: 0;
+  margin: 0 0 20px 0;
+}
+
+/* Status Dashboard */
+.status-dashboard {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.status-card {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  min-width: 200px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease;
+}
+
+.status-card:hover {
+  transform: translateY(-2px);
+}
+
+.status-card h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.status-card p {
+  margin: 10px 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.status-card small {
+  display: block;
+  color: #888;
+  font-size: 0.8rem;
+  margin-top: 5px;
+}
+
+.status-indicator {
+  font-size: 2rem;
+  margin: 10px 0;
+}
+
+.status-card.healthy {
+  border-left: 4px solid #28a745;
+}
+
+.status-card.unhealthy {
+  border-left: 4px solid #ffc107;
+}
+
+.status-card.disconnected {
+  border-left: 4px solid #dc3545;
+}
+
+.status-card.checking {
+  border-left: 4px solid #17a2b8;
+}
+
+.status-card.connected {
+  border-left: 4px solid #28a745;
 }
 
 main {
@@ -52,6 +118,11 @@ main {
   border-color: #667eea;
 }
 
+.todo-input:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
 .add-button {
   padding: 12px 24px;
   background: #667eea;
@@ -64,8 +135,13 @@ main {
   transition: background-color 0.3s ease;
 }
 
-.add-button:hover {
+.add-button:hover:not(:disabled) {
   background: #5a6fd8;
+}
+
+.add-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 
 .todo-list {
@@ -79,6 +155,22 @@ main {
   color: #666;
   font-style: italic;
   margin: 20px 0;
+}
+
+.service-unavailable {
+  color: #dc3545;
+  padding: 20px;
+  border: 2px dashed #dc3545;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.service-unavailable h3 {
+  margin: 0 0 10px 0;
+}
+
+.service-unavailable p {
+  margin: 0;
 }
 
 .todo-item {
@@ -143,30 +235,53 @@ main {
   margin: 20px auto;
   max-width: 600px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  border-left: 4px solid #dc3545;
 } 
 
+.error h3 {
+  margin: 0 0 10px 0;
+}
 
-.connection-status {
-  margin-top: 10px;
+.error p {
+  margin: 0 0 15px 0;
+}
+
+.error button {
+  background: #dc3545;
+  color: white;
+  border: none;
   padding: 8px 16px;
-  border-radius: 20px;
-  display: inline-block;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-.connection-status.connected {
-  background-color: #28a745;
+.error button:hover {
+  background: #c82333;
+}
+
+.loading {
   color: white;
+  font-size: 1.2rem;
+  margin: 50px 0;
 }
 
-.connection-status.checking-connection {
-  background-color: #ffc107;
-  color: #212529;
-}
-
-.connection-status.connection-failed,
-.connection-status.backend-error {
-  background-color: #dc3545;
-  color: white;
+/* Responsive design */
+@media (max-width: 768px) {
+  .status-dashboard {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .status-card {
+    width: 100%;
+    max-width: 300px;
+  }
+  
+  .todo-form {
+    flex-direction: column;
+  }
+  
+  .App-header h1 {
+    font-size: 2rem;
+  }
 }
