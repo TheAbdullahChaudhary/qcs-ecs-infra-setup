@@ -1,193 +1,196 @@
-# Todo App - 3-Tier Architecture on AWS ECS
+# 3-Tier ECS Application
 
-A modern Todo application built with React, Node.js, and PostgreSQL, deployed on AWS ECS with Jenkins CI/CD pipeline.
+A modern 3-tier web application built with React, Node.js, and PostgreSQL, designed to run on AWS ECS with proper networking, security, and scalability.
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React App     │    │   Node.js API   │    │   PostgreSQL    │
-│   (Frontend)    │◄──►│   (Backend)     │◄──►│   (Database)    │
-│   Port: 80      │    │   Port: 4000    │    │   Port: 5432    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+Internet → ALB → Frontend (Public Subnet) → Backend (Private Subnet) → PostgreSQL (RDS)
 ```
-
-## ✨ Features
-
-### Frontend (React)
-- ✅ Add new todos
-- ✅ Mark todos as complete/incomplete
-- ✅ Delete todos
-- ✅ Real-time updates
-- ✅ Modern, responsive UI
-- ✅ Error handling
-
-### Backend (Node.js + Express)
-- ✅ RESTful API
-- ✅ PostgreSQL database integration
-- ✅ CORS enabled
-- ✅ Input validation
-- ✅ Error handling
-- ✅ Health check endpoint
-
-### Database (PostgreSQL)
-- ✅ Todo items with text and completion status
-- ✅ Automatic timestamps
-- ✅ Data persistence
-
-## 🚀 Quick Start (Local Development)
-
-### Prerequisites
-- Docker and Docker Compose
-- Node.js (for local development)
-
-### Running Locally
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd 3-tier-app
-   ```
-
-2. **Start all services**
-   ```bash
-   cd backend
-   docker-compose up --build
-   ```
-
-3. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:4000
-   - Health Check: http://localhost:4000/api/health
-
-## 🏗️ Infrastructure (AWS ECS)
 
 ### Components
-- **VPC**: Custom VPC with public/private subnets
-- **ECS Cluster**: EC2 launch type for applications, Fargate for Jenkins
-- **EFS**: Persistent storage for Jenkins
-- **ECR**: Docker image repositories
-- **Jenkins**: CI/CD pipeline on Fargate
-- **Security Groups**: Network isolation
 
-### Deployment
-1. **Apply Terraform**
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
+- **Frontend**: React application served by Nginx
+- **Backend**: Node.js/Express API with Sequelize ORM
+- **Database**: PostgreSQL on RDS
+- **Infrastructure**: ECS Fargate, Application Load Balancer, VPC with public/private subnets
+- **Security**: AWS Secrets Manager for database credentials, security groups, IAM roles
 
-2. **Build and deploy via Jenkins**
-   - Jenkins will automatically build Docker images
-   - Push images to ECR
-   - Deploy to ECS services
+## Features
 
-## 📁 Project Structure
+- ✅ **Real-time Status Monitoring**: Frontend displays backend and database connection status
+- ✅ **Todo Management**: Full CRUD operations for todo items
+- ✅ **Health Checks**: Comprehensive health monitoring for all services
+- ✅ **Secure Credentials**: Database credentials stored in AWS Secrets Manager
+- ✅ **High Availability**: Multi-AZ deployment with load balancing
+- ✅ **Modern UI**: Responsive design with real-time status indicators
+- ✅ **Containerized**: Docker-based deployment with optimized images
+
+## Application Structure
 
 ```
 3-tier-app/
-├── frontend/                 # React Todo App
+├── frontend/                 # React application
 │   ├── src/
 │   │   ├── App.js           # Main React component
-│   │   └── App.css          # Styles
-│   ├── public/
-│   ├── package.json
-│   └── Dockerfile
+│   │   └── App.css          # Styling
+│   ├── Dockerfile           # Multi-stage Docker build
+│   ├── nginx.conf           # Nginx configuration
+│   └── package.json
 ├── backend/                  # Node.js API
-│   ├── index.js             # Express server
-│   ├── package.json
-│   ├── Dockerfile
-│   └── docker-compose.yml   # Local development
-├── jenkins/                  # CI/CD
-│   ├── Dockerfile
-│   └── Jenkinsfile
-├── modules/                  # Terraform modules
-│   ├── vpc/
-│   ├── ecs-cluster/
-│   ├── efs/
-│   ├── jenkins/
-│   ├── frontend/
-│   └── backend/
-├── main.tf                   # Root Terraform
-├── variables.tf
-└── README.md
+│   ├── index.js             # Express server with Sequelize
+│   ├── Dockerfile           # Production Docker image
+│   └── package.json
+├── MANUAL_SETUP_GUIDE.md    # Complete manual setup instructions
+├── setup-variables.sh       # Environment variables setup script
+└── README.md               # This file
 ```
 
-## 🔧 API Endpoints
+## Quick Start
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/todos` | Get all todos |
-| POST | `/api/todos` | Create new todo |
-| GET | `/api/todos/:id` | Get single todo |
-| PATCH | `/api/todos/:id` | Update todo |
-| DELETE | `/api/todos/:id` | Delete todo |
+### Prerequisites
 
-### Example API Usage
+- AWS CLI configured with appropriate permissions
+- Docker installed locally
+- Node.js 18+ (for local development)
+
+### Local Development
+
+1. **Start the backend**:
+   ```bash
+   cd backend
+   npm install
+   npm start
+   ```
+
+2. **Start the frontend**:
+   ```bash
+   cd frontend
+   npm install
+   npm start
+   ```
+
+3. **Set up PostgreSQL** (local or RDS):
+   - Create a database named `ecsdb`
+   - Update backend environment variables
+
+### Production Deployment
+
+Follow the complete manual setup guide in `MANUAL_SETUP_GUIDE.md` for step-by-step instructions to deploy on AWS ECS.
+
+## Key Features
+
+### Frontend Features
+- **Real-time Status Display**: Shows backend and database connection status
+- **Responsive Design**: Works on desktop and mobile devices
+- **Modern UI**: Beautiful gradient design with glassmorphism effects
+- **Error Handling**: Comprehensive error display and recovery
+- **Auto-refresh**: Status checks every 30 seconds
+
+### Backend Features
+- **RESTful API**: Complete CRUD operations for todos
+- **Database Integration**: Sequelize ORM with PostgreSQL
+- **Health Monitoring**: Detailed health check endpoints
+- **Error Handling**: Comprehensive error handling and logging
+- **Security**: Environment-based configuration with secrets management
+
+### Infrastructure Features
+- **Multi-tier Security**: Public/private subnet separation
+- **Load Balancing**: Application Load Balancer with health checks
+- **Auto-scaling**: ECS services with configurable scaling
+- **Monitoring**: CloudWatch logs and metrics
+- **Secrets Management**: Secure credential storage
+
+## API Endpoints
+
+### Health Checks
+- `GET /health` - Overall application health
+- `GET /health/database` - Database connection status
+
+### Todo Operations
+- `GET /todos` - Get all todos
+- `POST /todos` - Create new todo
+- `GET /todos/:id` - Get specific todo
+- `PATCH /todos/:id` - Update todo
+- `DELETE /todos/:id` - Delete todo
+
+## Environment Variables
+
+### Backend
+- `POSTGRES_HOST` - Database host
+- `POSTGRES_PORT` - Database port (default: 5432)
+- `POSTGRES_DB` - Database name
+- `POSTGRES_USER` - Database username (from Secrets Manager)
+- `POSTGRES_PASSWORD` - Database password (from Secrets Manager)
+- `NODE_ENV` - Environment (development/production)
+- `PORT` - Server port (default: 4000)
+
+### Frontend
+- `REACT_APP_API_URL` - Backend API URL (default: /api)
+
+## Security Considerations
+
+1. **Network Security**: Backend runs in private subnets
+2. **Credential Management**: Database credentials in AWS Secrets Manager
+3. **IAM Roles**: Least privilege access for ECS tasks
+4. **Security Groups**: Minimal required port access
+5. **HTTPS Ready**: ALB configured for SSL termination
+
+## Monitoring and Logging
+
+- **CloudWatch Logs**: All container logs centralized
+- **Health Checks**: Application and load balancer health monitoring
+- **Metrics**: ECS service metrics and database monitoring
+- **Alerts**: Configurable CloudWatch alarms
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Failed**
+   - Check security group rules
+   - Verify Secrets Manager permissions
+   - Confirm database endpoint
+
+2. **Frontend Not Loading**
+   - Check ALB health checks
+   - Verify nginx configuration
+   - Check container logs
+
+3. **Backend API Errors**
+   - Check database connectivity
+   - Verify environment variables
+   - Review application logs
+
+### Debug Commands
 
 ```bash
-# Get all todos
-curl http://localhost:4000/api/todos
+# Check service status
+aws ecs describe-services --cluster ecs-app-cluster --services ecs-backend-service
 
-# Create a todo
-curl -X POST http://localhost:4000/api/todos \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Buy groceries"}'
+# View logs
+aws logs tail /ecs/backend --follow
 
-# Update a todo
-curl -X PATCH http://localhost:4000/api/todos/1 \
-  -H "Content-Type: application/json" \
-  -d '{"completed": true}'
-
-# Delete a todo
-curl -X DELETE http://localhost:4000/api/todos/1
+# Check target health
+aws elbv2 describe-target-health --target-group-arn <target-group-arn>
 ```
 
-## 🐳 Docker Images
+## Contributing
 
-- **Frontend**: React app served by Nginx
-- **Backend**: Node.js Express API
-- **Database**: PostgreSQL (local development)
-- **Jenkins**: Jenkins with Docker and AWS CLI
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test locally and in staging
+5. Submit a pull request
 
-## 🔒 Security
+## License
 
-- All services run in private subnets
-- Security groups control network access
-- IAM roles for service permissions
-- EFS encryption for Jenkins persistence
+This project is licensed under the MIT License.
 
-## 📊 Monitoring
+## Support
 
-- CloudWatch logs for all containers
-- Health check endpoints
-- Error handling and logging
-
-## 🚀 CI/CD Pipeline
-
-1. **Code Push** → Jenkins detects changes
-2. **Build** → Docker images for frontend/backend
-3. **Push** → Images pushed to ECR
-4. **Deploy** → ECS services updated with new images
-
-## 🛠️ Development
-
-### Adding Features
-1. Update frontend React components
-2. Add backend API endpoints
-3. Update database schema if needed
-4. Test locally with Docker Compose
-5. Push to trigger CI/CD pipeline
-
-### Environment Variables
-- `POSTGRES_HOST`: Database host
-- `POSTGRES_DB`: Database name
-- `POSTGRES_USER`: Database user
-- `POSTGRES_PASSWORD`: Database password
-- `REACT_APP_API_URL`: Backend API URL
-
-## 📝 License
-
-This project is for educational purposes and demonstrates a complete 3-tier application deployment on AWS ECS. 
+For issues and questions:
+1. Check the troubleshooting section
+2. Review the manual setup guide
+3. Check AWS documentation for ECS, RDS, and VPC
+4. Open an issue in the repository 

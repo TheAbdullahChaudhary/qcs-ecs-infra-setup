@@ -17,6 +17,7 @@ const sequelize = new Sequelize(
   process.env.POSTGRES_PASSWORD || "ecspassword",
   {
     host: process.env.POSTGRES_HOST || "db",
+    port: process.env.POSTGRES_PORT || 5432,
     dialect: "postgres",
     logging: false,
     pool: {
@@ -24,6 +25,10 @@ const sequelize = new Sequelize(
       min: 0,
       acquire: 30000,
       idle: 10000
+    },
+    retry: {
+      max: 3,
+      timeout: 5000
     }
   }
 );
@@ -47,19 +52,23 @@ const Todo = sequelize.define('Todo', {
   timestamps: true
 });
 
-
 // Health check endpoints
 app.get('/health', async (req, res) => {
   try {
+    const dbStart = Date.now();
     await sequelize.authenticate();
+    const dbEnd = Date.now();
+    
     res.status(200).json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       services: {
         database: {
           status: 'connected',
+          responseTime: `${dbEnd - dbStart}ms`,
           host: process.env.POSTGRES_HOST || "db",
-          database: process.env.POSTGRES_DB || "ecsdb"
+          database: process.env.POSTGRES_DB || "ecsdb",
+          port: process.env.POSTGRES_PORT || 5432
         },
         api: {
           status: 'running',
@@ -69,6 +78,7 @@ app.get('/health', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Health check failed:', error.message);
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
@@ -76,7 +86,8 @@ app.get('/health', async (req, res) => {
         database: {
           status: 'disconnected',
           error: error.message,
-          host: process.env.POSTGRES_HOST || "db"
+          host: process.env.POSTGRES_HOST || "db",
+          database: process.env.POSTGRES_DB || "ecsdb"
         },
         api: {
           status: 'running',
@@ -101,6 +112,7 @@ app.get('/health/database', async (req, res) => {
         host: process.env.POSTGRES_HOST || "db",
         database: process.env.POSTGRES_DB || "ecsdb",
         user: process.env.POSTGRES_USER || "ecsuser",
+        port: process.env.POSTGRES_PORT || 5432,
         maxConnections: sequelize.config.pool.max
       }
     });
@@ -120,22 +132,23 @@ app.get('/health/database', async (req, res) => {
 async function initializeDatabase() {
   try {
     await sequelize.authenticate();
-    console.log('Database connection established successfully.');
+    console.log('✅ Database connection established successfully.');
     
     await sequelize.sync({ force: false }); // Don't force recreate tables
-    console.log('Database synchronized.');
+    console.log('✅ Database synchronized.');
   } catch (error) {
-    console.error('Unable to connect to the database:', error);
+    console.error('❌ Unable to connect to the database:', error.message);
+    // Don't exit the process, let it retry
   }
 }
 
 // Initialize database
 initializeDatabase();
 
-// Routes
+// API Routes
 
 // Health check
-app.get("/api/health", async (req, res) => {
+app.get("/health", async (req, res) => {
   try {
     await sequelize.authenticate();
     res.json({ 
@@ -153,7 +166,7 @@ app.get("/api/health", async (req, res) => {
 });
 
 // Get all todos
-app.get("/api/todos", async (req, res) => {
+app.get("/todos", async (req, res) => {
   try {
     const todos = await Todo.findAll({
       order: [['createdAt', 'DESC']]
@@ -166,7 +179,7 @@ app.get("/api/todos", async (req, res) => {
 });
 
 // Create new todo
-app.post("/api/todos", async (req, res) => {
+app.post("/todos", async (req, res) => {
   try {
     const { text } = req.body;
     
@@ -187,7 +200,7 @@ app.post("/api/todos", async (req, res) => {
 });
 
 // Update todo
-app.patch("/api/todos/:id", async (req, res) => {
+app.patch("/todos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { text, completed } = req.body;
@@ -215,7 +228,7 @@ app.patch("/api/todos/:id", async (req, res) => {
 });
 
 // Delete todo
-app.delete("/api/todos/:id", async (req, res) => {
+app.delete("/todos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -234,7 +247,7 @@ app.delete("/api/todos/:id", async (req, res) => {
 });
 
 // Get single todo
-app.get("/api/todos/:id", async (req, res) => {
+app.get("/todos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -263,6 +276,7 @@ app.use((req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Todo API server listening on port ${port}`);
-  console.log(`Health check: http://localhost:${port}/api/health`);
+  console.log(`🚀 Todo API server listening on port ${port}`);
+  console.log(`📊 Health check: http://localhost:${port}/health`);
+  console.log(`🔗 Database host: ${process.env.POSTGRES_HOST || "db"}`);
 });
