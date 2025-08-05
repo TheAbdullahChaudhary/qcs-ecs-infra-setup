@@ -13,8 +13,11 @@ COPY . .
 
 # Set environment variables
 ENV HOST=0.0.0.0
+ENV PORT=80
 ENV REACT_APP_API_URL=/api
 
-EXPOSE 3000
+# Expose the port
+EXPOSE 80
 
-CMD ["npm", "start"]
+# Start the app
+CMD ["sh", "-c", "npm start"]
