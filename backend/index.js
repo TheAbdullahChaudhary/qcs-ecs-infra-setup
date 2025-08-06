@@ -147,16 +147,16 @@ initializeDatabase();
 
 // API Routes
 
-// Health check
-app.get("/health", async (req, res) => {
-  try {
-    await sequelize.authenticate();
-    res.json({ 
-      status: "healthy", 
-      message: "Backend is running and connected to database",
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
+// Health check (duplicate - removing this one)
+// app.get("/health", async (req, res) => {
+//   try {
+//     await sequelize.authenticate();
+//     res.json({ 
+//       status: "healthy", 
+//       message: "Backend is running and connected to database",
+//       timestamp: new Date().toISOString()
+//     });
+//   } catch (error) {
     res.status(500).json({ 
       status: "unhealthy", 
       message: "Database connection failed", 

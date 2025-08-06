@@ -1,36 +1,46 @@
-resource "aws_efs_file_system" "jenkins" {
-  creation_token = "jenkins-efs"
+resource "aws_efs_file_system" "database" {
+  creation_token = "database-efs"
+  encrypted      = true
+  
   tags = {
-    Name = "jenkins-efs"
+    Name = "database-efs"
   }
 }
 
-resource "aws_efs_mount_target" "jenkins" {
+resource "aws_efs_mount_target" "database" {
   for_each = toset(var.subnet_ids)
-  file_system_id  = aws_efs_file_system.jenkins.id
+  file_system_id  = aws_efs_file_system.database.id
   subnet_id       = each.value
   security_groups = [var.security_group_id]
 }
 
-# EFS Access Point for Jenkins (enables Fargate to mount EFS)
-resource "aws_efs_access_point" "jenkins" {
-  file_system_id = aws_efs_file_system.jenkins.id
+# EFS Access Point for Database (enables Fargate to mount EFS)
+resource "aws_efs_access_point" "database" {
+  file_system_id = aws_efs_file_system.database.id
 
   root_directory {
-    path = "/jenkins"
+    path = "/database"
     creation_info {
-      owner_gid   = 1000
-      owner_uid   = 1000
+      owner_gid   = 999
+      owner_uid   = 999
       permissions = "755"
     }
   }
 
   posix_user {
-    gid = 1000
-    uid = 1000
+    gid = 999
+    uid = 999
   }
 
   tags = {
-    Name = "jenkins-access-point"
+    Name = "database-access-point"
   }
+}
+
+output "efs_id" {
+  value = aws_efs_file_system.database.id
+}
+
+output "access_point_id" {
+  value = aws_efs_access_point.database.id
 }
