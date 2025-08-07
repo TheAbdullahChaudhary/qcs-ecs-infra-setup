@@ -244,6 +244,9 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 
 ## Phase 7: Service Discovery Setup
 
+### What is a Namespace?
+A namespace in AWS Cloud Map is a logical container for service names. It enables ECS services to discover and communicate with each other using DNS names (e.g., `ecs-database-service.ecs.internal`). This is essential for dynamic environments like ECS, where IP addresses change frequently. By creating a namespace, you enable reliable, DNS-based service discovery for your application components.
+
 ### Step 7.1: Create Private DNS Namespace
 1. **Cloud Map Console** → Namespaces → Create namespace
 2. **Configure**:
@@ -253,8 +256,9 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **VPC**: Select your VPC (e.g., `ecs-vpc`).
    - **Note:** If you do not see the VPC field, make sure you have selected 'API calls and DNS queries in VPCs'. If it still does not appear, try refreshing the page, using a different browser, or checking your IAM permissions.
 3. **Click "Create namespace"**
+4. **Result:** Your namespace (e.g., `ecs.internal`) is now created and ready to use. You can now register services (like your database) in this namespace, which will allow other ECS services to discover them by DNS name.
 
-### Step 7.2: Create Database Service
+### Step 7.2: Create Database Service (Service Discovery Registration)
 1. **Cloud Map Console** → Services → Create service
 2. **Configure**:
    - **Service name**: `ecs-database-service`
@@ -265,10 +269,14 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **Health check**: Custom configuration
      - **Failure threshold**: 1
 3. **Click "Create service"**
+4. **Result:** This step registers a DNS name (e.g., `ecs-database-service.ecs.internal`) for your database. When you create your ECS service for the database, it will register running tasks with this DNS name, enabling other services (like your backend) to connect using the name instead of an IP address.
 
 ---
 
 ## Phase 8: Application Load Balancer Setup
+
+### What is an Application Load Balancer (ALB)?
+An ALB distributes incoming application traffic across multiple ECS tasks (containers) to ensure high availability and scalability. It supports path-based routing, health checks, and integrates with ECS services. In this setup, the ALB routes `/api/*` requests to the backend service and all other requests to the frontend service.
 
 ### Step 8.1: Create ALB
 1. **EC2 Console** → Load Balancers → Create load balancer
@@ -337,6 +345,9 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 ---
 
 ## Phase 9: ECS Task Definitions
+
+### What is a Task Definition?
+A task definition is the blueprint for your containerized application. It specifies the Docker image, environment variables, ports, resource requirements, IAM roles, and other settings needed to run your application in ECS. You must create a task definition before you can launch an ECS service.
 
 ### Step 9.1: Database Task Definition
 1. **ECS Console** → Task Definitions → Create new task definition
@@ -426,6 +437,9 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 ---
 
 ## Phase 10: ECS Services
+
+### What is an ECS Service?
+An ECS service is responsible for running and maintaining a specified number of instances (tasks) of a task definition. It ensures that the desired number of tasks are always running, restarts failed tasks, and integrates with load balancers and service discovery. When you create a service, you specify the task definition, networking, and (optionally) service discovery and load balancing settings.
 
 ### Step 10.1: Database Service
 1. **ECS Console** → Clusters → Select cluster → Services → Create service
