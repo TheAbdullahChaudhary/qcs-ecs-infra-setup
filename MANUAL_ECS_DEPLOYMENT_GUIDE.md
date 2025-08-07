@@ -670,55 +670,242 @@ An ECS service is responsible for running and maintaining a specified number of 
 
 ---
 
-## Phase 11: Testing and Verification
+## Phase 11: Application Code Verification
 
-### Step 11.1: Check Service Status
+### ✅ Frontend Application Code Verification
+
+**File: `frontend/src/App.js`**
+- ✅ **API Configuration**: Uses `process.env.REACT_APP_API_URL` with fallback to `/api`
+- ✅ **Health Check**: Makes requests to `${API_BASE_URL}/health` for status monitoring
+- ✅ **CRUD Operations**: Implements full todo CRUD (Create, Read, Update, Delete)
+- ✅ **Error Handling**: Proper error handling and user feedback
+- ✅ **Status Monitoring**: Real-time backend and database status display
+
+**File: `frontend/package.json`**
+- ✅ **Dependencies**: React 18.2.0, react-scripts 5.0.1
+- ✅ **Build Script**: `npm run build` for production build
+- ✅ **Browserslist**: Proper production browser support
+
+**File: `frontend/nginx.conf`**
+- ✅ **Port Configuration**: Listens on port 80
+- ✅ **Health Endpoint**: `/health` returns 200 "healthy"
+- ✅ **React Router**: Handles client-side routing with `try_files`
+- ✅ **Security Headers**: XSS protection, content security policy
+- ✅ **Static Assets**: Proper caching for JS/CSS files
+
+**File: `frontend/Dockerfile`**
+- ✅ **Multi-stage Build**: Node.js build + nginx production
+- ✅ **Port Exposure**: Exposes port 80
+- ✅ **Nginx Config**: Copies custom nginx.conf
+- ✅ **Production Ready**: Serves built React app
+
+### ✅ Backend Application Code Verification
+
+**File: `backend/index.js`**
+- ✅ **Environment Variables**: Uses all required PostgreSQL env vars
+- ✅ **Database Connection**: Sequelize with proper connection pooling
+- ✅ **Health Endpoints**: `/health` and `/health/database` endpoints
+- ✅ **CRUD API**: Full REST API for todos (`/todos`)
+- ✅ **Error Handling**: Comprehensive error handling and logging
+- ✅ **CORS**: Enabled for frontend communication
+- ✅ **Connection Retries**: Database connection retry logic
+
+**File: `backend/package.json`**
+- ✅ **Dependencies**: Express, Sequelize, pg, cors, dotenv
+- ✅ **Start Script**: `node index.js` for production
+- ✅ **Production Ready**: All necessary dependencies included
+
+**File: `backend/Dockerfile`**
+- ✅ **Security**: Runs as non-root user (nodejs)
+- ✅ **Health Check**: Built-in health check for port 4000
+- ✅ **Port Exposure**: Exposes port 4000
+- ✅ **Production Ready**: Uses `npm ci --only=production`
+
+### ✅ Database Application Code Verification
+
+**File: `database/Dockerfile`**
+- ✅ **Base Image**: PostgreSQL 15-alpine
+- ✅ **Environment Variables**: Sets up database, user, password
+- ✅ **Initialization**: Copies init.sql for database setup
+- ✅ **Port Exposure**: Exposes port 5432
+- ✅ **Configuration**: Uses custom postgresql.conf
+
+**File: `database/init.sql`**
+- ✅ **Database Setup**: Creates ecsdb database
+- ✅ **User Permissions**: Grants proper permissions to ecsuser
+- ✅ **Extensions**: Enables uuid-ossp extension
+- ✅ **Initialization Tracking**: Creates db_init table
+
+### ✅ Environment Variables Summary
+
+**Frontend Environment:**
+```env
+REACT_APP_API_URL=http://ecs-backend-service.ecs.internal:4000/api
+```
+
+**Backend Environment:**
+```env
+NODE_ENV=production
+POSTGRES_DB=ecsdb
+POSTGRES_HOST=ecs-database-service.ecs.internal
+POSTGRES_PORT=5432
+POSTGRES_USER=ecsuser
+POSTGRES_PASSWORD=ecspassword
+```
+
+**Database Environment:**
+```env
+POSTGRES_DB=ecsdb
+POSTGRES_USER=ecsuser
+POSTGRES_PASSWORD=ecspassword
+```
+
+### ✅ Health Check Endpoints
+
+| Service | Endpoint | Expected Response |
+|---------|----------|-------------------|
+| Frontend | `http://localhost/health` | `200 "healthy"` |
+| Backend | `http://localhost:4000/health` | JSON with status |
+| Database | `pg_isready -U ecsuser -d ecsdb` | Exit code 0 |
+
+**All application code is correctly configured for ECS deployment!**
+
+---
+
+## Phase 12: Build and Push Docker Images
+
+### Step 12.1: Build Docker Images
+Before creating ECS services, you need to build and push your Docker images to ECR.
+
+1. **Login to ECR**:
+   ```bash
+   aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin 941377128979.dkr.ecr.eu-west-1.amazonaws.com
+   ```
+
+2. **Build Frontend Image**:
+   ```bash
+   cd frontend
+   docker build -t ecs-frontend .
+   docker tag ecs-frontend:latest 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-frontend:latest
+   ```
+
+3. **Build Backend Image**:
+   ```bash
+   cd ../backend
+   docker build -t ecs-backend .
+   docker tag ecs-backend:latest 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-backend:latest
+   ```
+
+4. **Build Database Image**:
+   ```bash
+   cd ../database
+   docker build -t ecs-database .
+   docker tag ecs-database:latest 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-database:latest
+   ```
+
+### Step 12.2: Push Images to ECR
+1. **Push Frontend**:
+   ```bash
+   docker push 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-frontend:latest
+   ```
+
+2. **Push Backend**:
+   ```bash
+   docker push 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-backend:latest
+   ```
+
+3. **Push Database**:
+   ```bash
+   docker push 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-database:latest
+   ```
+
+---
+
+## Phase 13: Testing and Verification
+
+### Step 13.1: Check Service Status
 1. **ECS Console** → Clusters → Select cluster
 2. **Verify all services are running**:
    - Database service: 1 task running
    - Backend service: 1 task running
    - Frontend service: 1 task running
 
-### Step 11.2: Test Application
-1. **Get ALB DNS name** from EC2 Console → Load Balancers
-2. **Test endpoints**:
-   - **Frontend**: `http://[ALB-DNS-NAME]/`
-   - **Backend Health**: `http://[ALB-DNS-NAME]/api/health`
-   - **Database Health**: `http://[ALB-DNS-NAME]/api/health/database`
+### Step 13.2: Check Target Groups
+1. **EC2 Console** → Target Groups
+2. **Verify targets are registered**:
+   - `Frontend-Target-Group`: Should show 1 healthy target
+   - `Backend-Target-Group`: Should show 1 healthy target
 
-### Step 11.3: Monitor Logs
+### Step 13.3: Test Application Endpoints
+Use your ALB DNS name: `ecs-alb-1564719148.eu-west-1.elb.amazonaws.com`
+
+1. **Frontend Application**:
+   ```
+   http://ecs-alb-1564719148.eu-west-1.elb.amazonaws.com/
+   ```
+   - Should show the Todo app interface
+   - Should display backend and database status
+
+2. **Backend Health Check**:
+   ```
+   http://ecs-alb-1564719148.eu-west-1.elb.amazonaws.com/api/health
+   ```
+   - Should return JSON with database connection status
+
+3. **Backend API Endpoints**:
+   ```
+   http://ecs-alb-1564719148.eu-west-1.elb.amazonaws.com/api/todos
+   ```
+   - Should return empty array or existing todos
+
+### Step 13.4: Test Full Application Flow
+1. **Add a Todo**: Use the frontend form to add a new todo
+2. **Verify Database**: Check that the todo is persisted
+3. **Toggle Todo**: Mark a todo as complete/incomplete
+4. **Delete Todo**: Remove a todo from the list
+
+### Step 13.5: Monitor Logs
 1. **CloudWatch Console** → Log groups
 2. **Check logs for each service**:
    - `/ecs/frontend`
    - `/ecs/backend`
    - `/ecs/database`
 
+### Step 13.6: Verify Service Discovery
+1. **Test internal communication**:
+   - Frontend should connect to backend via `ecs-backend-service.ecs.internal:4000`
+   - Backend should connect to database via `ecs-database-service.ecs.internal:5432`
+
 ---
 
 ## 🎉 Deployment Complete!
 
 Your 3-tier application is now deployed on ECS with:
-- ✅ **Frontend**: React app served by nginx
-- ✅ **Backend**: Node.js API with Express
-- ✅ **Database**: PostgreSQL with EFS persistence
-- ✅ **Load Balancer**: ALB with proper routing
-- ✅ **Service Discovery**: Database accessible by name
+- ✅ **Frontend**: React app served by nginx on port 80
+- ✅ **Backend**: Node.js API with Express on port 4000
+- ✅ **Database**: PostgreSQL with proper initialization
+- ✅ **Load Balancer**: ALB with path-based routing (`/api/*` → backend)
+- ✅ **Service Discovery**: Internal DNS resolution for service communication
 - ✅ **Security**: Proper security groups and IAM roles
 - ✅ **Monitoring**: CloudWatch logs for all services
+- ✅ **Health Checks**: All services monitored and healthy
 
 ### 📊 Architecture Summary
 ```
 Internet → ALB → Frontend Service (React) → Backend Service (Node.js) → Database Service (PostgreSQL)
+                ↑         ↑
+            (service    (service
+             discovery)   discovery)
 ```
 
 ### 🔧 Key Features
-- **High Availability**: Multiple tasks across AZs
+- **High Availability**: Services across multiple AZs
 - **Auto Scaling**: ECS can scale based on demand
 - **Health Checks**: All services monitored
-- **Service Discovery**: Database accessible by service name
-- **Load Balancing**: ALB distributes traffic
+- **Service Discovery**: Internal DNS-based communication
+- **Load Balancing**: ALB with intelligent routing
 - **Logging**: Centralized CloudWatch logs
-- **Security**: Proper network isolation
+- **Security**: Network isolation and IAM roles
 
 ---
 
@@ -766,9 +953,11 @@ Internet → ALB → Frontend Service (React) → Backend Service (Node.js) → 
 
 ---
 
-## 📝 Notes
-- Replace `[ALB-DNS-NAME]` with your actual ALB DNS name
-- Update ECR image URIs if using different repository
-- Consider adding HTTPS listener for production
-- Set up CloudWatch alarms for monitoring
-- Configure auto-scaling policies as needed
+## 📝 Next Steps for Production
+
+1. **Add HTTPS**: Configure SSL certificate for ALB
+2. **Auto Scaling**: Set up ECS auto-scaling policies
+3. **Monitoring**: Configure CloudWatch alarms
+4. **Backup**: Set up database backups
+5. **CI/CD**: Implement automated deployment pipeline
+6. **Security**: Add WAF and additional security measures
