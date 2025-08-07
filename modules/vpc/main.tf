@@ -3,45 +3,45 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
-    Name = "ecs_vpc"
+    Name = "ecs-vpc"
   }
 }
 
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.this.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
+  cidr_block              = "10.0.0.0/20"
+  availability_zone       = "eu-west-1a"
   map_public_ip_on_launch = true
-  tags = { Name = "ecs_vpc-public-us-east-1a" }
+  tags = { Name = "ecs-vpc-subnet-public1-eu-west-1a" }
 }
 
 resource "aws_subnet" "public_b" {
   vpc_id                  = aws_vpc.this.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-1b"
+  cidr_block              = "10.0.16.0/20"
+  availability_zone       = "eu-west-1b"
   map_public_ip_on_launch = true
-  tags = { Name = "ecs_vpc-public-us-east-1b" }
+  tags = { Name = "ecs-vpc-subnet-public2-eu-west-1b" }
 }
 
 resource "aws_subnet" "private_a" {
   vpc_id            = aws_vpc.this.id
-  cidr_block        = "10.0.11.0/24"
-  availability_zone = "us-east-1a"
-  tags = { Name = "ecs_vpc-private-us-east-1a" }
+  cidr_block        = "10.0.128.0/20"
+  availability_zone = "eu-west-1a"
+  tags = { Name = "ecs-vpc-subnet-private1-eu-west-1a" }
 }
 
 resource "aws_subnet" "private_b" {
   vpc_id            = aws_vpc.this.id
-  cidr_block        = "10.0.12.0/24"
-  availability_zone = "us-east-1b"
-  tags = { Name = "ecs_vpc-private-us-east-1b" }
+  cidr_block        = "10.0.144.0/20"
+  availability_zone = "eu-west-1b"
+  tags = { Name = "ecs-vpc-subnet-private2-eu-west-1b" }
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.this.id
   tags = {
-    Name = "ecs_igw"
+    Name = "ecs-igw"
   }
 }
 
@@ -49,7 +49,7 @@ resource "aws_internet_gateway" "main" {
 resource "aws_eip" "nat" {
   domain = "vpc"
   tags = {
-    Name = "ecs_nat_eip"
+    Name = "ecs-nat-eip"
   }
 }
 
@@ -57,7 +57,7 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public_a.id
   tags = {
-    Name = "ecs_nat_gateway"
+    Name = "ecs-nat-gateway"
   }
 }
 
@@ -65,14 +65,14 @@ resource "aws_nat_gateway" "main" {
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
   tags = {
-    Name = "ecs_public_rt"
+    Name = "ecs-public-rt"
   }
 }
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
   tags = {
-    Name = "ecs_private_rt"
+    Name = "ecs-private-rt"
   }
 }
 

@@ -1,196 +1,205 @@
-# 3-Tier ECS Application
+# 3-Tier Application on AWS ECS - Terraform Configuration
 
-A modern 3-tier web application built with React, Node.js, and PostgreSQL, designed to run on AWS ECS with proper networking, security, and scalability.
+This Terraform configuration deploys a 3-tier application (Frontend, Backend, Database) on AWS ECS Fargate with the following architecture:
 
-## Architecture
-
-```
-Internet → ALB → Frontend (Public Subnet) → Backend (Private Subnet) → PostgreSQL (RDS)
-```
-
-### Components
-
-- **Frontend**: React application served by Nginx
-- **Backend**: Node.js/Express API with Sequelize ORM
-- **Database**: PostgreSQL on RDS
-- **Infrastructure**: ECS Fargate, Application Load Balancer, VPC with public/private subnets
-- **Security**: AWS Secrets Manager for database credentials, security groups, IAM roles
-
-## Features
-
-- ✅ **Real-time Status Monitoring**: Frontend displays backend and database connection status
-- ✅ **Todo Management**: Full CRUD operations for todo items
-- ✅ **Health Checks**: Comprehensive health monitoring for all services
-- ✅ **Secure Credentials**: Database credentials stored in AWS Secrets Manager
-- ✅ **High Availability**: Multi-AZ deployment with load balancing
-- ✅ **Modern UI**: Responsive design with real-time status indicators
-- ✅ **Containerized**: Docker-based deployment with optimized images
-
-## Application Structure
+## Architecture Overview
 
 ```
-3-tier-app/
-├── frontend/                 # React application
-│   ├── src/
-│   │   ├── App.js           # Main React component
-│   │   └── App.css          # Styling
-│   ├── Dockerfile           # Multi-stage Docker build
-│   ├── nginx.conf           # Nginx configuration
-│   └── package.json
-├── backend/                  # Node.js API
-│   ├── index.js             # Express server with Sequelize
-│   ├── Dockerfile           # Production Docker image
-│   └── package.json
-├── MANUAL_SETUP_GUIDE.md    # Complete manual setup instructions
-├── setup-variables.sh       # Environment variables setup script
-└── README.md               # This file
+Internet → ALB → Frontend (React) → Backend (Node.js) → Database (PostgreSQL)
+                    ↓                    ↓                    ↓
+                Public Subnets    Private Subnets    Private Subnets + EFS
 ```
 
-## Quick Start
+## Components
 
-### Prerequisites
+### Networking
+- **VPC**: `10.0.0.0/16` with DNS support enabled
+- **Public Subnets**: `10.0.0.0/20` (eu-west-1a), `10.0.16.0/20` (eu-west-1b)
+- **Private Subnets**: `10.0.128.0/20` (eu-west-1a), `10.0.144.0/20` (eu-west-1b)
+- **Internet Gateway**: For public subnet internet access
+- **NAT Gateway**: For private subnet internet access
+- **Route Tables**: Separate routing for public and private subnets
 
-- AWS CLI configured with appropriate permissions
-- Docker installed locally
-- Node.js 18+ (for local development)
+### Security Groups
+- **ALB SG**: Allows HTTP/HTTPS from internet
+- **Frontend SG**: Allows HTTP from ALB
+- **Backend SG**: Allows port 4000 from ALB
+- **Database SG**: Allows PostgreSQL (5432) from Backend
+- **EFS SG**: Allows NFS (2049) from Database
 
-### Local Development
+### Application Load Balancer
+- **ALB**: Internet-facing load balancer
+- **Target Groups**: 
+  - Frontend-Target-Group (port 80, health check `/health`)
+  - Backend-Target-Group (port 4000, health check `/health`)
+- **Listener Rules**:
+  - Priority 100: `/api/*` → Backend-Target-Group
+  - Default: All traffic → Frontend-Target-Group
 
-1. **Start the backend**:
-   ```bash
-   cd backend
-   npm install
-   npm start
-   ```
+### Service Discovery (Cloud Map)
+- **Namespace**: `ecs.internal`
+- **Services**:
+  - `ecs-database-service.ecs.internal:5432`
+  - `ecs-backend-service.ecs.internal:4000`
 
-2. **Start the frontend**:
-   ```bash
-   cd frontend
-   npm install
-   npm start
-   ```
+### ECS Cluster & Services
+- **Cluster**: `3-tier-ecs-cluster`
+- **Services**:
+  - Database: 1 task, private subnets, EFS mounted
+  - Backend: 1 task, private subnets, service discovery
+  - Frontend: 1 task, public subnets, ALB integration
 
-3. **Set up PostgreSQL** (local or RDS):
-   - Create a database named `ecsdb`
-   - Update backend environment variables
+### Storage
+- **EFS**: Encrypted file system for database persistence
+- **Access Point**: Configured for PostgreSQL user (999:999)
 
-### Production Deployment
+### IAM Roles
+- **Task Execution Role**: For ECS agent operations
+- **Task Role**: For application permissions (EFS access)
 
-Follow the complete manual setup guide in `MANUAL_SETUP_GUIDE.md` for step-by-step instructions to deploy on AWS ECS.
+## Prerequisites
 
-## Key Features
+1. **AWS CLI** configured with appropriate credentials
+2. **Terraform** (version >= 1.0)
+3. **Docker images** pushed to Docker Hub:
+   - `theabdullahchaudhary/ecs-frontend:latest`
+   - `theabdullahchaudhary/ecs-backend:latest`
+   - `theabdullahchaudhary/ecs-database:latest`
 
-### Frontend Features
-- **Real-time Status Display**: Shows backend and database connection status
-- **Responsive Design**: Works on desktop and mobile devices
-- **Modern UI**: Beautiful gradient design with glassmorphism effects
-- **Error Handling**: Comprehensive error display and recovery
-- **Auto-refresh**: Status checks every 30 seconds
+## Configuration
 
-### Backend Features
-- **RESTful API**: Complete CRUD operations for todos
-- **Database Integration**: Sequelize ORM with PostgreSQL
-- **Health Monitoring**: Detailed health check endpoints
-- **Error Handling**: Comprehensive error handling and logging
-- **Security**: Environment-based configuration with secrets management
+### Variables
 
-### Infrastructure Features
-- **Multi-tier Security**: Public/private subnet separation
-- **Load Balancing**: Application Load Balancer with health checks
-- **Auto-scaling**: ECS services with configurable scaling
-- **Monitoring**: CloudWatch logs and metrics
-- **Secrets Management**: Secure credential storage
+Edit `terraform.tfvars` to customize the deployment:
 
-## API Endpoints
+```hcl
+aws_region = "eu-west-1"
+app_name   = "3-tier-app"
+environment = "production"
+
+# Docker Hub Image URIs
+frontend_image = "theabdullahchaudhary/ecs-frontend:latest"
+backend_image  = "theabdullahchaudhary/ecs-backend:latest"
+database_image = "theabdullahchaudhary/ecs-database:latest"
+```
+
+## Deployment
+
+### 1. Initialize Terraform
+```bash
+terraform init
+```
+
+### 2. Plan the Deployment
+```bash
+terraform plan
+```
+
+### 3. Apply the Configuration
+```bash
+terraform apply
+```
+
+### 4. Verify Deployment
+```bash
+terraform output alb_url
+```
+
+## Application Access
+
+- **Frontend**: `http://<ALB-DNS-NAME>`
+- **Backend API**: `http://<ALB-DNS-NAME>/api`
+- **Health Checks**:
+  - Frontend: `http://<ALB-DNS-NAME>/health`
+  - Backend: `http://<ALB-DNS-NAME>/api/health`
+
+## Service Communication
+
+### Frontend → Backend
+- Uses service discovery: `http://ecs-backend-service.ecs.internal:4000/api`
+- Environment variable: `REACT_APP_API_URL`
+
+### Backend → Database
+- Uses service discovery: `ecs-database-service.ecs.internal:5432`
+- Environment variables: `POSTGRES_HOST`, `POSTGRES_PORT`, etc.
+
+## Monitoring & Logging
+
+### CloudWatch Log Groups
+- `/ecs/frontend`
+- `/ecs/backend`
+- `/ecs/database`
 
 ### Health Checks
-- `GET /health` - Overall application health
-- `GET /health/database` - Database connection status
+- **Frontend**: `curl -f http://localhost/health`
+- **Backend**: HTTP GET to `/health` endpoint
+- **Database**: `pg_isready -U ecsuser -d ecsdb`
 
-### Todo Operations
-- `GET /todos` - Get all todos
-- `POST /todos` - Create new todo
-- `GET /todos/:id` - Get specific todo
-- `PATCH /todos/:id` - Update todo
-- `DELETE /todos/:id` - Delete todo
+## Resource Specifications
 
-## Environment Variables
+### Task Definitions
+- **Database**: 512 vCPU, 1024 MB memory, EFS mounted
+- **Backend**: 256 vCPU, 512 MB memory
+- **Frontend**: 256 vCPU, 512 MB memory
 
-### Backend
-- `POSTGRES_HOST` - Database host
-- `POSTGRES_PORT` - Database port (default: 5432)
-- `POSTGRES_DB` - Database name
-- `POSTGRES_USER` - Database username (from Secrets Manager)
-- `POSTGRES_PASSWORD` - Database password (from Secrets Manager)
-- `NODE_ENV` - Environment (development/production)
-- `PORT` - Server port (default: 4000)
-
-### Frontend
-- `REACT_APP_API_URL` - Backend API URL (default: /api)
-
-## Security Considerations
-
-1. **Network Security**: Backend runs in private subnets
-2. **Credential Management**: Database credentials in AWS Secrets Manager
-3. **IAM Roles**: Least privilege access for ECS tasks
-4. **Security Groups**: Minimal required port access
-5. **HTTPS Ready**: ALB configured for SSL termination
-
-## Monitoring and Logging
-
-- **CloudWatch Logs**: All container logs centralized
-- **Health Checks**: Application and load balancer health monitoring
-- **Metrics**: ECS service metrics and database monitoring
-- **Alerts**: Configurable CloudWatch alarms
+### Security
+- All containers run as non-root users
+- EFS transit encryption enabled
+- IAM roles with minimal required permissions
+- Security groups with least-privilege access
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Database Connection Failed**
-   - Check security group rules
-   - Verify Secrets Manager permissions
-   - Confirm database endpoint
+1. **Account Blocked Error**
+   - Check AWS account status and billing
+   - Verify service quotas for ECS Fargate
+   - Contact AWS Support if needed
 
-2. **Frontend Not Loading**
-   - Check ALB health checks
-   - Verify nginx configuration
-   - Check container logs
+2. **Service Discovery Issues**
+   - Verify namespace and service names
+   - Check DNS resolution within VPC
+   - Ensure services are in the same VPC
 
-3. **Backend API Errors**
-   - Check database connectivity
-   - Verify environment variables
-   - Review application logs
+3. **EFS Mount Issues**
+   - Verify EFS mount targets in private subnets
+   - Check IAM permissions for EFS access
+   - Ensure transit encryption is enabled
 
-### Debug Commands
+### Useful Commands
 
 ```bash
-# Check service status
-aws ecs describe-services --cluster ecs-app-cluster --services ecs-backend-service
+# Check ECS services
+aws ecs describe-services --cluster 3-tier-ecs-cluster --services ecs-database-service ecs-backend-service ecs-frontend-service
 
-# View logs
-aws logs tail /ecs/backend --follow
+# Check CloudWatch logs
+aws logs describe-log-streams --log-group-name /ecs/frontend --order-by LastEventTime --descending
 
-# Check target health
+# Check ALB target health
 aws elbv2 describe-target-health --target-group-arn <target-group-arn>
 ```
 
-## Contributing
+## Cleanup
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test locally and in staging
-5. Submit a pull request
+To destroy all resources:
+```bash
+terraform destroy
+```
 
-## License
+**Warning**: This will delete all data including the EFS file system and database data.
 
-This project is licensed under the MIT License.
+## Cost Optimization
 
-## Support
+- Use Fargate Spot for non-production workloads
+- Consider auto-scaling based on CloudWatch metrics
+- Monitor and adjust resource allocations
+- Use CloudWatch Insights for log analysis
 
-For issues and questions:
-1. Check the troubleshooting section
-2. Review the manual setup guide
-3. Check AWS documentation for ECS, RDS, and VPC
-4. Open an issue in the repository 
+## Security Best Practices
+
+- Enable AWS Config for compliance monitoring
+- Use AWS Secrets Manager for sensitive data
+- Implement VPC Flow Logs for network monitoring
+- Regular security group reviews
+- Enable CloudTrail for API logging 

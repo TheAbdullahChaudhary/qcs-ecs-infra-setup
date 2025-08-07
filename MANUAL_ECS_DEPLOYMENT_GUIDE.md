@@ -174,6 +174,23 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **Permissions**: 755
 3. **Click "Create access point"**
 
+### Step 3.3: Create EFS Mount Targets
+**Important**: EFS mount targets must be created in the same subnets where your database service will run.
+
+1. **Select your EFS file system** → Network → Create mount target
+2. **Configure for each private subnet**:
+   - **Subnet**: Select `ecs-private-subnet-1` (eu-west-1a)
+   - **Security groups**: Select `ecs-database-sg`
+   - **IP address**: Auto-assign
+3. **Click "Create mount target"**
+4. **Repeat for second subnet**:
+   - **Subnet**: Select `ecs-private-subnet-2` (eu-west-1b)
+   - **Security groups**: Select `ecs-database-sg`
+   - **IP address**: Auto-assign
+5. **Click "Create mount target"**
+
+**Result**: You should have 2 mount targets, one in each private subnet where your database service will run.
+
 ---
 
 ## Phase 4: IAM Roles Setup
@@ -200,9 +217,11 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
            "Effect": "Allow",
            "Action": [
              "elasticfilesystem:ClientMount",
-             "elasticfilesystem:ClientWrite"
+             "elasticfilesystem:ClientWrite",
+             "elasticfilesystem:DescribeFileSystems",
+             "elasticfilesystem:DescribeAccessPoints"
            ],
-           "Resource": "arn:aws:elasticfilesystem:eu-west-1:941377128979:file-system/fs-0c0ff6ec7511fc458"
+           "Resource": "*"
          }
        ]
      }
@@ -216,6 +235,8 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - Attach your custom policy: `elasticfilesystem-ClientRootAccess`
 5. **Role name**: `ecs-task-role`
 6. **Create the role**
+
+**Note**: The original policy was too restrictive. This updated policy includes all necessary EFS permissions for mounting and accessing file systems.
 
 ---
 
@@ -384,13 +405,13 @@ A task definition is the blueprint for your containerized application. It specif
 1. **ECS Console** → Task Definitions → Create new task definition
 2. **Configure**:
    - **Task definition name**: `ecs-database-task`
-   - **Task role**: `ecs-task-role`
+   - **Task role**: `ecs-task-role` (required for EFS access)
    - **Task execution role**: `ecs-task-execution-role`
    - **Task memory**: 1024 MB
    - **Task CPU**: 512 vCPU
 3. **Add container**:
    - **Container name**: `database`
-   - **Image**: `941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-database:latest`
+   - **Image**: `theabdullahchaudhary/ecs-database:latest`
    - **Port mappings**: 5432:5432
    - **Environment variables**:
      - `POSTGRES_DB`: `ecsdb`
@@ -407,7 +428,20 @@ A task definition is the blueprint for your containerized application. It specif
      - **Timeout**: 5 seconds
      - **Retries**: 3
      - **Start period**: 60 seconds
-4. **Click "Create"**
+4. **Add EFS Volume** (for data persistence):
+   - **Volume name**: `database-efs`
+   - **Volume type**: EFS
+   - **File system ID**: Select your EFS file system (`ecs-database-efs`)
+   - **Access point ID**: Select your access point (`ecs-database-ap`)
+   - **Root directory**: `/`
+   - **Transit encryption**: Enabled
+5. **Add mount point to container**:
+   - **Source volume**: `database-efs`
+   - **Container path**: `/var/lib/postgresql/data`
+   - **Read-only**: No
+6. **Click "Create"**
+
+**Note**: This configuration mounts EFS to `/var/lib/postgresql/data` for persistent database storage. Without EFS, database data will be lost when the container restarts.
 
 ### Step 9.2: Backend Task Definition
 1. **Create new task definition**:
@@ -418,7 +452,7 @@ A task definition is the blueprint for your containerized application. It specif
    - **Task CPU**: 256 vCPU
 2. **Add container**:
    - **Container name**: `backend`
-   - **Image**: `941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-backend:latest`
+   - **Image**: `theabdullahchaudhary/ecs-backend:latest`
    - **Port mappings**: 4000:4000
    - **Environment variables**:
      - `NODE_ENV`: `production`
@@ -448,7 +482,7 @@ A task definition is the blueprint for your containerized application. It specif
    - **Task CPU**: 256 vCPU
 2. **Add container**:
    - **Container name**: `frontend`
-   - **Image**: `941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-frontend:latest`
+   - **Image**: `theabdullahchaudhary/ecs-frontend:latest`
    - **Port mappings**: 80:80
    - **Environment variables**:
      - `REACT_APP_API_URL`: `http://ecs-backend-service.ecs.internal:4000/api`
@@ -609,13 +643,13 @@ An ECS service is responsible for running and maintaining a specified number of 
 1. **ECS Console** → Clusters → Select cluster → Services → Create service
 2. **Configure**:
    - **Launch type**: FARGATE
-   - **Task definition**: `ecs-database-task`
+   - **Task definition**: `ecs-database-task` (with EFS volume)
    - **Service name**: `ecs-database-service`
    - **Number of tasks**: 1
    - **Deployment type**: Service
 3. **Networking**:
    - **VPC**: **Select your VPC here** (e.g., `ecs-vpc`)
-   - **Subnets**: Select both private subnets
+   - **Subnets**: Select both private subnets (EFS mount targets must be in same subnets)
    - **Security groups**: Select `ecs-database-sg`
    - **Auto-assign public IP**: Disabled
 4. **Service discovery**:
@@ -623,6 +657,8 @@ An ECS service is responsible for running and maintaining a specified number of 
    - **Namespace**: Select `ecs.internal`
    - **Service name**: `ecs-database-service`
 5. **Click "Create service"**
+
+**Important**: The database service must be deployed in subnets where EFS mount targets exist. EFS mount targets should be created in the same private subnets where your database service runs.
 
 ### Step 10.2: Backend Service
 1. **Create service**:
@@ -775,49 +811,52 @@ POSTGRES_PASSWORD=ecspassword
 ## Phase 12: Build and Push Docker Images
 
 ### Step 12.1: Build Docker Images
-Before creating ECS services, you need to build and push your Docker images to ECR.
+Before creating ECS services, you need to build and push your Docker images to Docker Hub.
 
-1. **Login to ECR**:
+1. **Login to Docker Hub**:
    ```bash
-   aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin 941377128979.dkr.ecr.eu-west-1.amazonaws.com
+   docker login
+   # Enter your Docker Hub username and password
    ```
 
 2. **Build Frontend Image**:
    ```bash
    cd frontend
-   docker build -t ecs-frontend .
-   docker tag ecs-frontend:latest 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-frontend:latest
+   docker build -t theabdullahchaudhary/ecs-frontend:latest .
    ```
 
 3. **Build Backend Image**:
    ```bash
    cd ../backend
-   docker build -t ecs-backend .
-   docker tag ecs-backend:latest 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-backend:latest
+   docker build -t theabdullahchaudhary/ecs-backend:latest .
    ```
 
 4. **Build Database Image**:
    ```bash
    cd ../database
-   docker build -t ecs-database .
-   docker tag ecs-database:latest 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-database:latest
+   docker build -t theabdullahchaudhary/ecs-database:latest .
    ```
 
-### Step 12.2: Push Images to ECR
+### Step 12.2: Push Images to Docker Hub
 1. **Push Frontend**:
    ```bash
-   docker push 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-frontend:latest
+   docker push theabdullahchaudhary/ecs-frontend:latest
    ```
 
 2. **Push Backend**:
    ```bash
-   docker push 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-backend:latest
+   docker push theabdullahchaudhary/ecs-backend:latest
    ```
 
 3. **Push Database**:
    ```bash
-   docker push 941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-database:latest
+   docker push theabdullahchaudhary/ecs-database:latest
    ```
+
+**Result**: Your images will be available at:
+- `theabdullahchaudhary/ecs-frontend:latest`
+- `theabdullahchaudhary/ecs-backend:latest`
+- `theabdullahchaudhary/ecs-database:latest`
 
 ---
 
@@ -893,9 +932,9 @@ Your 3-tier application is now deployed on ECS with:
 ### 📊 Architecture Summary
 ```
 Internet → ALB → Frontend Service (React) → Backend Service (Node.js) → Database Service (PostgreSQL)
-                ↑         ↑
-            (service    (service
-             discovery)   discovery)
+                ↑         ↑                                    ↑
+            (service    (service                           (EFS Mount)
+             discovery)   discovery)                    /var/lib/postgresql/data
 ```
 
 ### 🔧 Key Features
@@ -904,8 +943,17 @@ Internet → ALB → Frontend Service (React) → Backend Service (Node.js) → 
 - **Health Checks**: All services monitored
 - **Service Discovery**: Internal DNS-based communication
 - **Load Balancing**: ALB with intelligent routing
+- **Data Persistence**: EFS for database storage
 - **Logging**: Centralized CloudWatch logs
 - **Security**: Network isolation and IAM roles
+
+### 💾 Storage Configuration
+- **Frontend**: Ephemeral storage (stateless)
+- **Backend**: Ephemeral storage (stateless)
+- **Database**: EFS persistent storage (`/var/lib/postgresql/data`)
+
+**Without EFS**: Database data is stored in ephemeral storage and will be lost when the container restarts.
+**With EFS**: Database data persists across container restarts and service updates.
 
 ---
 
@@ -961,3 +1009,180 @@ Internet → ALB → Frontend Service (React) → Backend Service (Node.js) → 
 4. **Backup**: Set up database backups
 5. **CI/CD**: Implement automated deployment pipeline
 6. **Security**: Add WAF and additional security measures
+
+---
+
+## 🚨 ECS Service Troubleshooting Guide
+
+### Common Service Failure Issues
+
+#### 1. **Tasks Stopped/Failed to Start**
+
+**Symptoms:**
+- Service shows "Stopped" status
+- Target group shows "No targets"
+- Tasks fail to start or stop immediately
+
+**Common Causes and Solutions:**
+
+##### **A. Image Pull Issues**
+- **Problem**: Cannot pull Docker image
+- **Solution**: 
+  - Verify image exists: `docker pull theabdullahchaudhary/ecs-backend:latest`
+  - Check image URI in task definition
+  - Ensure task execution role has ECR permissions (if using ECR)
+
+##### **B. Resource Allocation Issues**
+- **Problem**: Insufficient CPU/Memory
+- **Solution**:
+  - Check task definition resource allocation
+  - Ensure container limits don't exceed task limits
+  - Verify Fargate platform version compatibility
+
+##### **C. Networking Issues**
+- **Problem**: Cannot assign ENI or connect to network
+- **Solution**:
+  - Verify subnets have available IP addresses
+  - Check security group rules
+  - Ensure VPC has proper route tables
+
+##### **D. Environment Variable Issues**
+- **Problem**: Application fails due to missing env vars
+- **Solution**:
+  - Verify all required environment variables are set
+  - Check for typos in variable names
+  - Ensure database connection variables are correct
+
+#### 2. **Health Check Failures**
+
+**Symptoms:**
+- Tasks start but become unhealthy
+- Target group shows unhealthy targets
+
+**Solutions:**
+- Verify health check path matches application endpoint
+- Check container port configuration
+- Ensure application responds to health check requests
+- Review CloudWatch logs for application errors
+
+#### 3. **Database Connection Issues**
+
+**Symptoms:**
+- Backend starts but cannot connect to database
+- Health checks fail due to database connection
+
+**Solutions:**
+- Verify database service is running
+- Check service discovery DNS resolution
+- Ensure security groups allow database traffic
+- Verify environment variables for database connection
+
+### Step-by-Step Troubleshooting Process
+
+#### **Step 1: Check Task Definition**
+1. **Go to ECS Console** → Task Definitions
+2. **Select your task definition** (e.g., `ecs-backend-task`)
+3. **Verify**:
+   - Image URI is correct
+   - Resource allocation is appropriate
+   - Environment variables are set
+   - Port mappings are correct
+
+#### **Step 2: Check Service Configuration**
+1. **Go to ECS Console** → Services
+2. **Select your service** (e.g., `ecs-backend-service`)
+3. **Verify**:
+   - Task definition revision is correct
+   - Subnets are properly configured
+   - Security groups are correct
+   - Load balancer configuration is valid
+
+#### **Step 3: Check CloudWatch Logs**
+1. **Go to CloudWatch Console** → Log groups
+2. **Check logs for each service**:
+   - `/ecs/frontend`
+   - `/ecs/backend`
+   - `/ecs/database`
+3. **Look for error messages** that indicate the problem
+
+#### **Step 4: Test Docker Images Locally**
+```bash
+# Test if images can be pulled and run
+docker pull theabdullahchaudhary/ecs-backend:latest
+docker run -p 4000:4000 theabdullahchaudhary/ecs-backend:latest
+
+# Test with environment variables
+docker run -p 4000:4000 \
+  -e POSTGRES_HOST=localhost \
+  -e POSTGRES_DB=ecsdb \
+  -e POSTGRES_USER=ecsuser \
+  -e POSTGRES_PASSWORD=ecspassword \
+  theabdullahchaudhary/ecs-backend:latest
+```
+
+#### **Step 5: Check Service Events**
+1. **Go to ECS Console** → Services → Your Service → Events
+2. **Look for error messages** that explain why tasks failed
+
+### Quick Fix Commands
+
+#### **Restart Service**
+```bash
+aws ecs update-service --cluster 3-tier-ecs-cluster --service ecs-backend-service --force-new-deployment
+```
+
+#### **Check Service Status**
+```bash
+aws ecs describe-services --cluster 3-tier-ecs-cluster --services ecs-backend-service
+```
+
+#### **Check Task Status**
+```bash
+aws ecs list-tasks --cluster 3-tier-ecs-cluster --service-name ecs-backend-service
+```
+
+### Common Error Messages and Solutions
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| "CannotPullContainerError" | Image not found or access denied | Verify image URI and permissions |
+| "OutOfMemoryError" | Insufficient memory | Increase task memory allocation |
+| "NoRouteToHostException" | Network connectivity issue | Check security groups and subnets |
+| "Connection refused" | Application not listening on port | Verify port configuration |
+| "Health check failed" | Application not responding | Check health check path and application logs |
+| "your account is currently blocked" | AWS account restrictions or service limits | Check account status, billing, and service limits |
+
+### "Account Blocked" Error Troubleshooting
+
+**Error**: `"your account is currently blocked"`
+
+**Possible Causes:**
+1. **AWS Account Suspension**: Payment issues, terms violations
+2. **Service Limits**: Fargate vCPU limits, ECS service limits
+3. **Region Constraints**: Service availability in eu-west-1
+4. **IAM Policy Issues**: Insufficient permissions for ECS tasks
+
+**Solutions:**
+1. **Check AWS Account Status**:
+   - Go to AWS Console → Account Settings
+   - Check billing dashboard for outstanding payments
+   - Verify account is not suspended
+
+2. **Check Service Limits**:
+   - Go to AWS Console → Service Quotas
+   - Check ECS and Fargate limits
+   - Request limit increases if needed
+
+3. **Verify IAM Permissions**:
+   - Ensure task execution role has proper permissions
+   - Check task role permissions for EFS access
+   - Verify all required policies are attached
+
+4. **Try Different Configuration**:
+   - Reduce task resource allocation
+   - Use smaller task definitions
+   - Start with minimal configuration
+
+5. **Contact AWS Support**:
+   - If account is suspended, contact AWS Support immediately
+   - Provide account ID and error details
