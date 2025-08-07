@@ -446,7 +446,7 @@ A task definition is the blueprint for your containerized application. It specif
    - **Image**: `941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-frontend:latest`
    - **Port mappings**: 80:80
    - **Environment variables**:
-     - `REACT_APP_API_URL`: `http://[ALB-DNS-NAME]/api`
+     - `REACT_APP_API_URL`: `http://ecs-backend-service.ecs.internal:4000/api`
    - **Log configuration**:
      - **Log driver**: awslogs
      - **Log group**: `/ecs/frontend`
@@ -459,6 +459,8 @@ A task definition is the blueprint for your containerized application. It specif
      - **Retries**: 3
      - **Start period**: 60 seconds
 3. **Click "Create"**
+
+**Note:** This configuration uses ECS Service Discovery (Cloud Map) for internal communication between frontend and backend. The backend service must be registered in Cloud Map (as done in Step 7.3) for the frontend to resolve `ecs-backend-service.ecs.internal`. This approach provides faster internal communication without going through the ALB.
 
 ---
 
