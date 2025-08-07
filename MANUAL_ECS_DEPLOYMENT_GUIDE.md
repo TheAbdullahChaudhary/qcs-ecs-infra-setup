@@ -32,7 +32,7 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 2. **Configure**:
    - **VPC**: Select `ecs-vpc`
    - **Subnet name**: `ecs-public-subnet-1`
-   - **Availability Zone**: `us-east-1a`
+   - **Availability Zone**: `eu-west-1a`
    - **IPv4 CIDR block**: `10.0.1.0/24`
    - **Auto-assign public IPv4 address**: Yes
 3. **Click "Create subnet"**
@@ -40,21 +40,21 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 #### Public Subnet 2
 1. **Create another subnet**:
    - **Subnet name**: `ecs-public-subnet-2`
-   - **Availability Zone**: `us-east-1b`
+   - **Availability Zone**: `eu-west-1b`
    - **IPv4 CIDR block**: `10.0.2.0/24`
    - **Auto-assign public IPv4 address**: Yes
 
 #### Private Subnet 1
 1. **Create private subnet**:
    - **Subnet name**: `ecs-private-subnet-1`
-   - **Availability Zone**: `us-east-1a`
+   - **Availability Zone**: `eu-west-1a`
    - **IPv4 CIDR block**: `10.0.11.0/24`
    - **Auto-assign public IPv4 address**: No
 
 #### Private Subnet 2
 1. **Create another private subnet**:
    - **Subnet name**: `ecs-private-subnet-2`
-   - **Availability Zone**: `us-east-1b`
+   - **Availability Zone**: `eu-west-1b`
    - **IPv4 CIDR block**: `10.0.12.0/24`
    - **Auto-assign public IPv4 address**: No
 
@@ -159,7 +159,7 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **Name**: `ecs-database-efs`
    - **VPC**: Select `ecs-vpc`
    - **Availability and durability**: One Zone
-   - **Availability Zone**: `us-east-1a`
+   - **Availability Zone**: `eu-west-1a`
 3. **Click "Create"**
 
 ### Step 3.2: Create Access Point
@@ -278,6 +278,22 @@ A namespace in AWS Cloud Map is a logical container for service names. It enable
 3. **Click "Create service"**
 4. **Result:** This step registers a DNS name (e.g., `ecs-database-service.ecs.internal`) for your database. When you create your ECS service for the database, it will register running tasks with this DNS name, enabling other services (like your backend) to connect using the name instead of an IP address.
 
+### Step 7.3: (Optional) Create Backend Service (Service Discovery Registration)
+If you want your backend to be discoverable by internal DNS (for example, for internal microservice communication), repeat the Cloud Map service registration for the backend:
+1. **Cloud Map Console** → Services → Create service
+2. **Configure**:
+   - **Service name**: `ecs-backend-service`
+   - **Namespace**: Select `ecs.internal`
+   - **DNS configuration**:
+     - **TTL**: 10
+     - **Routing policy**: Multivalue
+   - **Health check**: Custom configuration
+     - **Failure threshold**: 1
+3. **Click "Create service"**
+4. **Result:** This step registers a DNS name (e.g., `ecs-backend-service.ecs.internal`) for your backend. When you create your ECS service for the backend, it will register running tasks with this DNS name, enabling other services (like your frontend) to connect using the name instead of an IP address.
+
+**Note:** You should create all required Cloud Map services (e.g., for database, backend, and optionally frontend) before creating ECS task definitions and ECS services if you want to use service discovery for internal communication.
+
 ---
 
 ## Phase 8: Application Load Balancer Setup
@@ -369,7 +385,7 @@ A task definition is the blueprint for your containerized application. It specif
    - **Task CPU**: 512 vCPU
 3. **Add container**:
    - **Container name**: `database`
-   - **Image**: `941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-database:latest`
+   - **Image**: `941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-database:latest`
    - **Port mappings**: 5432:5432
    - **Environment variables**:
      - `POSTGRES_DB`: `ecsdb`
@@ -378,7 +394,7 @@ A task definition is the blueprint for your containerized application. It specif
    - **Log configuration**:
      - **Log driver**: awslogs
      - **Log group**: `/ecs/database`
-     - **Region**: us-east-1
+     - **Region**: eu-west-1
      - **Stream prefix**: ecs
    - **Health check**:
      - **Command**: `["CMD-SHELL", "pg_isready -U ecsuser -d ecsdb"]`
@@ -397,7 +413,7 @@ A task definition is the blueprint for your containerized application. It specif
    - **Task CPU**: 256 vCPU
 2. **Add container**:
    - **Container name**: `backend`
-   - **Image**: `941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-backend:latest`
+   - **Image**: `941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-backend:latest`
    - **Port mappings**: 4000:4000
    - **Environment variables**:
      - `NODE_ENV`: `production`
@@ -409,7 +425,7 @@ A task definition is the blueprint for your containerized application. It specif
    - **Log configuration**:
      - **Log driver**: awslogs
      - **Log group**: `/ecs/backend`
-     - **Region**: us-east-1
+     - **Region**: eu-west-1
      - **Stream prefix**: ecs
    - **Health check**:
      - **Command**: `["CMD-SHELL", "node -e \"require('http').get('http://localhost:4000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })\""]`
@@ -427,14 +443,14 @@ A task definition is the blueprint for your containerized application. It specif
    - **Task CPU**: 256 vCPU
 2. **Add container**:
    - **Container name**: `frontend`
-   - **Image**: `941377128979.dkr.ecr.us-east-1.amazonaws.com/ecs-frontend:latest`
+   - **Image**: `941377128979.dkr.ecr.eu-west-1.amazonaws.com/ecs-frontend:latest`
    - **Port mappings**: 80:80
    - **Environment variables**:
      - `REACT_APP_API_URL`: `http://[ALB-DNS-NAME]/api`
    - **Log configuration**:
      - **Log driver**: awslogs
      - **Log group**: `/ecs/frontend`
-     - **Region**: us-east-1
+     - **Region**: eu-west-1
      - **Stream prefix**: ecs
    - **Health check**:
      - **Command**: `["CMD-SHELL", "curl -f http://localhost/health || exit 1"]`
@@ -443,6 +459,44 @@ A task definition is the blueprint for your containerized application. It specif
      - **Retries**: 3
      - **Start period**: 60 seconds
 3. **Click "Create"**
+
+---
+
+## Frontend-to-Backend Communication: ALB DNS vs. Service Discovery
+
+### Why Use ALB DNS for Backend API?
+In this manual, the frontend communicates with the backend using the Application Load Balancer (ALB) DNS name (e.g., `http://[ALB-DNS-NAME]/api`). This is set via the environment variable:
+
+```
+REACT_APP_API_URL=http://[ALB-DNS-NAME]/api
+```
+
+#### When to Use ALB DNS:
+- You want the frontend to talk to the backend through the ALB
+- Public access is required (exposing APIs to the internet)
+- You need load balancing, SSL termination, or WAF protection
+
+#### Pros:
+- Secure (if using HTTPS)
+- Scalable
+- Supports path-based routing (e.g., `/api`)
+
+### Alternative: Service Discovery (Cloud Map)
+For internal-only communication (no public access), you could use ECS Service Discovery (Cloud Map) DNS names (e.g., `http://ecs-backend-service.ecs.internal/api`). This avoids ALB costs and is faster for internal microservices, but does not provide public access or SSL.
+
+#### Summary Table
+
+| Feature                | Using ALB DNS                           | Using ECS Namespace (Cloud Map)     |
+| ---------------------- | --------------------------------------- | ----------------------------------- |
+| Communication Type     | External or internal (via ALB)          | Internal only (within VPC)          |
+| DNS Example            | `ecs-backend-alb-xyz.elb.amazonaws.com` | `backend.ecs.internal`              |
+| Requires Load Balancer | ✅ Yes                                   | ❌ No                                |
+| Cost                   | 💰 Higher (ALB costs money)             | 💸 Lower (no ALB required)          |
+| SSL / HTTPS Support    | ✅ Yes                                   | ❌ Not built-in                      |
+| Speed                  | 🌐 Slower (external path)               | ⚡ Faster (internal DNS resolution)  |
+| Use Case               | Public access, centralized API gateway  | Internal microservice communication |
+
+**This manual uses the ALB DNS approach for frontend-backend communication.**
 
 ---
 
