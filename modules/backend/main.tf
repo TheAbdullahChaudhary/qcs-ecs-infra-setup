@@ -27,9 +27,9 @@ resource "aws_ecs_task_definition" "backend" {
           name  = "POSTGRES_DB"
           value = "ecsdb"
         },
-        {
+                {
           name  = "POSTGRES_HOST"
-          value = var.database_host
+          value = "ecs-database-service.ecs.internal"
         },
         {
           name  = "POSTGRES_PORT"

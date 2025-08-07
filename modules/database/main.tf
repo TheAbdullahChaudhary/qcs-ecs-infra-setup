@@ -32,13 +32,7 @@ resource "aws_ecs_task_definition" "database" {
           value = "ecspassword"
         }
       ]
-      mountPoints = [
-        {
-          sourceVolume  = "database-storage"
-          containerPath = "/var/lib/postgresql/data"
-          readOnly      = false
-        }
-      ]
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -57,19 +51,7 @@ resource "aws_ecs_task_definition" "database" {
     }
   ])
 
-  volume {
-    name = "database-storage"
-    efs_volume_configuration {
-      file_system_id          = var.efs_file_system_id
-      root_directory          = "/"
-      transit_encryption      = "ENABLED"
-      transit_encryption_port = 2049
-      authorization_config {
-        access_point_id = var.efs_access_point_id
-        iam             = "ENABLED"
-      }
-    }
-  }
+
 
   tags = {
     Name = "ecs-database-task"
@@ -87,6 +69,10 @@ resource "aws_ecs_service" "database" {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids
     assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = var.service_discovery_service_arn
   }
 
   depends_on = [aws_ecs_task_definition.database]

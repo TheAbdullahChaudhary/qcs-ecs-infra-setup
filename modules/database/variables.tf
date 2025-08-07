@@ -36,4 +36,9 @@ variable "efs_access_point_id" {
 variable "log_group_name" {
   description = "Name of the CloudWatch log group"
   type        = string
+}
+
+variable "service_discovery_service_arn" {
+  description = "ARN of the service discovery service"
+  type        = string
 } 

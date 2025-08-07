@@ -20,7 +20,7 @@ resource "aws_ecs_task_definition" "frontend" {
       environment = [
         {
           name  = "REACT_APP_API_URL"
-          value = "/api"
+          value = "${var.alb_url}/api"
         }
       ]
       logConfiguration = {

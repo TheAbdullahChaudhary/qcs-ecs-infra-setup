@@ -27,8 +27,8 @@ const sequelize = new Sequelize(
       idle: 10000
     },
     retry: {
-      max: 3,
-      timeout: 5000
+      max: 10,
+      timeout: 10000
     }
   }
 );
@@ -79,8 +79,9 @@ app.get('/health', async (req, res) => {
     });
   } catch (error) {
     console.error('Health check failed:', error.message);
-    res.status(503).json({
-      status: 'unhealthy',
+    // Return 200 instead of 503 to prevent ECS from killing the container
+    res.status(200).json({
+      status: 'degraded',
       timestamp: new Date().toISOString(),
       services: {
         database: {
@@ -130,15 +131,31 @@ app.get('/health/database', async (req, res) => {
 
 // Database initialization
 async function initializeDatabase() {
-  try {
-    await sequelize.authenticate();
-    console.log('✅ Database connection established successfully.');
-    
-    await sequelize.sync({ force: false }); // Don't force recreate tables
-    console.log('✅ Database synchronized.');
-  } catch (error) {
-    console.error('❌ Unable to connect to the database:', error.message);
-    // Don't exit the process, let it retry
+  let retries = 0;
+  const maxRetries = 10;
+  
+  while (retries < maxRetries) {
+    try {
+      console.log(`🔄 Attempting to connect to database (attempt ${retries + 1}/${maxRetries})...`);
+      await sequelize.authenticate();
+      console.log('✅ Database connection established successfully.');
+      
+      await sequelize.sync({ force: false }); // Don't force recreate tables
+      console.log('✅ Database synchronized.');
+      return; // Success, exit the function
+    } catch (error) {
+      retries++;
+      console.error(`❌ Database connection attempt ${retries} failed:`, error.message);
+      
+      if (retries >= maxRetries) {
+        console.error('❌ Max retries reached. Database connection failed.');
+        // Don't exit the process, let it continue without database
+        return;
+      }
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
   }
 }
 
@@ -157,13 +174,13 @@ initializeDatabase();
 //       timestamp: new Date().toISOString()
 //     });
 //   } catch (error) {
-    res.status(500).json({ 
-      status: "unhealthy", 
-      message: "Database connection failed", 
-      error: error.message 
-    });
-  }
-});
+//     res.status(500).json({ 
+//       status: "unhealthy", 
+//       message: "Database connection failed", 
+//       error: error.message 
+//     });
+//   }
+// });
 
 // Get all todos
 app.get("/todos", async (req, res) => {

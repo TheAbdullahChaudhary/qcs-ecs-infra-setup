@@ -31,9 +31,4 @@ variable "target_group_arn" {
 variable "log_group_name" {
   description = "Name of the CloudWatch log group"
   type        = string
-}
-
-variable "database_host" {
-  description = "Hostname of the database service"
-  type        = string
 } 

@@ -14,6 +14,32 @@ module "efs" {
   security_group_id = aws_security_group.efs.id
 }
 
+# Service Discovery
+resource "aws_service_discovery_private_dns_namespace" "main" {
+  name        = "ecs.internal"
+  description = "Private DNS namespace for ECS services"
+  vpc         = module.vpc.vpc_id
+}
+
+resource "aws_service_discovery_service" "database" {
+  name = "ecs-database-service"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.main.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+}
+
 # ECS Cluster
 module "ecs_cluster" {
   source = "./modules/ecs-cluster"
@@ -292,14 +318,15 @@ resource "aws_cloudwatch_log_group" "database" {
 module "database" {
   source = "./modules/database"
   
-  cluster_name          = module.ecs_cluster.cluster_name
-  execution_role_arn    = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn         = aws_iam_role.ecs_task_role.arn
-  subnet_ids            = module.vpc.private_subnet_ids
-  security_group_ids    = [aws_security_group.database.id]
-  efs_file_system_id    = module.efs.efs_id
-  efs_access_point_id   = module.efs.access_point_id
-  log_group_name        = aws_cloudwatch_log_group.database.name
+  cluster_name                = module.ecs_cluster.cluster_name
+  execution_role_arn          = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn               = aws_iam_role.ecs_task_role.arn
+  subnet_ids                  = module.vpc.private_subnet_ids
+  security_group_ids          = [aws_security_group.database.id]
+  efs_file_system_id          = module.efs.efs_id
+  efs_access_point_id         = module.efs.access_point_id
+  log_group_name              = aws_cloudwatch_log_group.database.name
+  service_discovery_service_arn = aws_service_discovery_service.database.arn
 }
 
 module "backend" {
@@ -312,7 +339,6 @@ module "backend" {
   security_group_ids = [aws_security_group.backend.id]
   target_group_arn   = aws_lb_target_group.backend.arn
   log_group_name     = aws_cloudwatch_log_group.backend.name
-  database_host      = module.database.service_name
 }
 
 module "frontend" {
@@ -324,25 +350,6 @@ module "frontend" {
   security_group_ids = [aws_security_group.frontend.id]
   target_group_arn   = aws_lb_target_group.frontend.arn
   log_group_name     = aws_cloudwatch_log_group.frontend.name
+  alb_url            = "http://${aws_lb.main.dns_name}"
 }
 
-# Outputs
-output "alb_dns_name" {
-  description = "DNS name of the load balancer"
-  value       = aws_lb.main.dns_name
-}
-
-output "frontend_url" {
-  description = "URL to access the frontend"
-  value       = "http://${aws_lb.main.dns_name}"
-}
-
-output "backend_health_url" {
-  description = "URL to check backend health"
-  value       = "http://${aws_lb.main.dns_name}/api/health"
-}
-
-output "frontend_health_url" {
-  description = "URL to check frontend health"
-  value       = "http://${aws_lb.main.dns_name}/health"
-}

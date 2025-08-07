@@ -26,4 +26,9 @@ variable "target_group_arn" {
 variable "log_group_name" {
   description = "Name of the CloudWatch log group"
   type        = string
+}
+
+variable "alb_url" {
+  description = "URL of the Application Load Balancer"
+  type        = string
 } 
