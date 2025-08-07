@@ -169,6 +169,8 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **User ID**: 1000
    - **Group ID**: 1000
    - **Root directory path**: `/`
+   - **Owner user ID**: 1000
+   - **Owner group ID**: 1000
    - **Permissions**: 755
 3. **Click "Create access point"**
 
@@ -186,14 +188,34 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - `AmazonECSTaskExecutionRolePolicy`
 4. **Role name**: `ecs-task-execution-role`
 
-### Step 4.2: ECS Task Role
-1. **Create another role**:
+### Step 4.2: ECS Task Role (with EFS Access)
+1. **Create a custom policy**:
+   - **Name**: `elasticfilesystem-ClientRootAccess`
+   - **Policy JSON**:
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Effect": "Allow",
+           "Action": [
+             "elasticfilesystem:ClientMount",
+             "elasticfilesystem:ClientWrite"
+           ],
+           "Resource": "arn:aws:elasticfilesystem:eu-west-1:941377128979:file-system/fs-0c0ff6ec7511fc458"
+         }
+       ]
+     }
+     ```
+2. **IAM Console** → Roles → Create role
+3. **Configure**:
    - **Trusted entity**: AWS service
    - **Service**: ECS
    - **Use case**: ECS - Task
-2. **Attach policies**:
-   - Create custom policy for EFS access
-3. **Role name**: `ecs-task-role`
+4. **Attach policies**:
+   - Attach your custom policy: `elasticfilesystem-ClientRootAccess`
+5. **Role name**: `ecs-task-role`
+6. **Create the role**
 
 ---
 
@@ -227,7 +249,9 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 2. **Configure**:
    - **Namespace name**: `ecs.internal`
    - **Description**: Private DNS namespace for ECS services
-   - **VPC**: Select `ecs-vpc`
+   - **Instance discovery**: **Select 'API calls and DNS queries in VPCs'** (this is required for a Private DNS namespace and will make the VPC selection field appear)
+   - **VPC**: Select your VPC (e.g., `ecs-vpc`).
+   - **Note:** If you do not see the VPC field, make sure you have selected 'API calls and DNS queries in VPCs'. If it still does not appear, try refreshing the page, using a different browser, or checking your IAM permissions.
 3. **Click "Create namespace"**
 
 ### Step 7.2: Create Database Service
