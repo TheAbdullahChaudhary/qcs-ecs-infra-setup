@@ -347,23 +347,28 @@ An ALB distributes incoming application traffic across multiple ECS tasks (conta
      - **Timeout**: 5 seconds
      - **Interval**: 30 seconds
 
-### Step 8.3: Create Listeners
+### Step 8.3: Create Listeners and Rules
 
 #### Default Listener
 1. **Select ALB** → Listeners → Create listener
 2. **Configure**:
    - **Protocol**: HTTP
    - **Port**: 80
-   - **Default action**: Forward to frontend target group
+   - **Default action**: Forward to `Frontend-Target-Group`
 3. **Click "Create listener"**
 
 #### Backend Listener Rule
 1. **Select the listener** → Rules → Create rule
 2. **Configure**:
    - **Priority**: 100
+   - **Name tag**: `backend-api-rule`
    - **IF**: Path is `/api/*`
-   - **THEN**: Forward to backend target group
+   - **THEN**: Forward to `Backend-Target-Group`
 3. **Click "Create rule"**
+
+**Result**: Your ALB will have:
+- **Default rule**: All traffic → `Frontend-Target-Group`
+- **Priority 100 rule**: `/api/*` → `Backend-Target-Group`
 
 ---
 
@@ -464,6 +469,96 @@ A task definition is the blueprint for your containerized application. It specif
 
 ---
 
+## ✅ Application Configuration Verification
+
+### Frontend Configuration ✅
+**File: `frontend/src/App.js`**
+- ✅ Uses `process.env.REACT_APP_API_URL` for API calls
+- ✅ Falls back to `/api` if environment variable not set
+- ✅ Makes requests to `${API_BASE_URL}/health`, `${API_BASE_URL}/todos`
+- ✅ Correctly handles CORS and error states
+
+**File: `frontend/nginx.conf`**
+- ✅ Listens on port 80
+- ✅ Has `/health` endpoint for health checks
+- ✅ Serves React app from `/usr/share/nginx/html`
+- ✅ Handles React Router with `try_files $uri $uri/ /index.html`
+
+### Backend Configuration ✅
+**File: `backend/index.js`**
+- ✅ Uses environment variables for database connection:
+  - `POSTGRES_HOST` (defaults to "db")
+  - `POSTGRES_PORT` (defaults to 5432)
+  - `POSTGRES_DB` (defaults to "ecsdb")
+  - `POSTGRES_USER` (defaults to "ecsuser")
+  - `POSTGRES_PASSWORD` (defaults to "ecspassword")
+- ✅ Has `/health` endpoint for health checks
+- ✅ Has `/health/database` endpoint for detailed DB status
+- ✅ Uses Sequelize with proper connection pooling
+- ✅ Handles database connection retries
+
+### Database Configuration ✅
+**File: `database/init.sql`**
+- ✅ Creates database with correct name (`ecsdb`)
+- ✅ Sets up user permissions for `ecsuser`
+- ✅ Creates initialization tracking table
+- ✅ Grants necessary privileges
+
+### Docker Configuration ✅
+**File: `frontend/Dockerfile`**
+- ✅ Multi-stage build with Node.js and nginx
+- ✅ Exposes port 80
+- ✅ Copies nginx configuration
+
+**File: `backend/Dockerfile`**
+- ✅ Uses Node.js 18-alpine
+- ✅ Exposes port 4000
+- ✅ Runs as non-root user (nodejs)
+- ✅ Has health check configured
+
+**File: `database/Dockerfile`**
+- ✅ Uses PostgreSQL 15-alpine
+- ✅ Exposes port 5432
+- ✅ Sets environment variables
+- ✅ Copies initialization script
+
+### Environment Variables Summary
+**Frontend Task Definition:**
+```env
+REACT_APP_API_URL=http://ecs-backend-service.ecs.internal:4000/api
+```
+
+**Backend Task Definition:**
+```env
+NODE_ENV=production
+POSTGRES_DB=ecsdb
+POSTGRES_HOST=ecs-database-service.ecs.internal
+POSTGRES_PORT=5432
+POSTGRES_USER=ecsuser
+POSTGRES_PASSWORD=ecspassword
+```
+
+**Database Task Definition:**
+```env
+POSTGRES_DB=ecsdb
+POSTGRES_USER=ecsuser
+POSTGRES_PASSWORD=ecspassword
+```
+
+### Communication Flow ✅
+1. **Frontend → Backend**: `http://ecs-backend-service.ecs.internal:4000/api`
+2. **Backend → Database**: `ecs-database-service.ecs.internal:5432`
+3. **External → Frontend**: Through ALB on port 80
+
+### Health Check Endpoints ✅
+- **Frontend**: `http://localhost/health` (nginx)
+- **Backend**: `http://localhost:4000/health` (Express)
+- **Database**: `pg_isready -U ecsuser -d ecsdb` (PostgreSQL)
+
+**All application files are correctly configured for ECS deployment with service discovery!**
+
+---
+
 ## Frontend-to-Backend Communication: ALB DNS vs. Service Discovery
 
 ### Why Use ALB DNS for Backend API?
@@ -534,26 +629,31 @@ An ECS service is responsible for running and maintaining a specified number of 
    - **Launch type**: FARGATE
    - **Task definition**: `ecs-backend-task`
    - **Service name**: `ecs-backend-service`
-   - **Number of tasks**: 2
+   - **Number of tasks**: 1
 2. **Networking**:
    - **VPC**: **Select your VPC here** (e.g., `ecs-vpc`)
    - **Subnets**: Select both private subnets
    - **Security groups**: Select `ecs-backend-sg`
    - **Auto-assign public IP**: Disabled
-3. **Load balancing**:
+3. **Service discovery**:
+   - **Enable service discovery**: Yes
+   - **Namespace**: Select `ecs.internal`
+   - **Service name**: `ecs-backend-service`
+4. **Load balancing**:
    - **Load balancer type**: Application Load Balancer
    - **Load balancer**: Select `ecs-alb`
-   - **Target group**: Select backend target group
+   - **Target group**: Select `Backend-Target-Group`
    - **Container name**: `backend`
    - **Container port**: 4000
-4. **Click "Create service"**
+   - **Health check path**: `/health`
+5. **Click "Create service"**
 
 ### Step 10.3: Frontend Service
 1. **Create service**:
    - **Launch type**: FARGATE
    - **Task definition**: `ecs-frontend-task`
    - **Service name**: `ecs-frontend-service`
-   - **Number of tasks**: 2
+   - **Number of tasks**: 1
 2. **Networking**:
    - **VPC**: **Select your VPC here** (e.g., `ecs-vpc`)
    - **Subnets**: Select both public subnets
@@ -562,9 +662,10 @@ An ECS service is responsible for running and maintaining a specified number of 
 3. **Load balancing**:
    - **Load balancer type**: Application Load Balancer
    - **Load balancer**: Select `ecs-alb`
-   - **Target group**: Select frontend target group
+   - **Target group**: Select `Frontend-Target-Group`
    - **Container name**: `frontend`
    - **Container port**: 80
+   - **Health check path**: `/health`
 4. **Click "Create service"**
 
 ---
@@ -575,8 +676,8 @@ An ECS service is responsible for running and maintaining a specified number of 
 1. **ECS Console** → Clusters → Select cluster
 2. **Verify all services are running**:
    - Database service: 1 task running
-   - Backend service: 2 tasks running
-   - Frontend service: 2 tasks running
+   - Backend service: 1 task running
+   - Frontend service: 1 task running
 
 ### Step 11.2: Test Application
 1. **Get ALB DNS name** from EC2 Console → Load Balancers
@@ -629,11 +730,39 @@ Internet → ALB → Frontend Service (React) → Backend Service (Node.js) → 
 3. **Database connection issues**: Check service discovery and security groups
 4. **ALB routing issues**: Verify listener rules and target groups
 
+### ALB and Target Group Issues:
+1. **Target group dropdown shows "No target groups found"**:
+   - Ensure target groups are created with **Target type: IP addresses**
+   - Verify target groups are in the same VPC as your ECS service
+   - Associate target groups with ALB listeners first
+   - Refresh the ECS service creation page
+
+2. **Target groups show "None associated" for load balancer**:
+   - Go to ALB → Listeners → Rules and ensure target groups are properly assigned
+   - Verify listener rules are configured correctly
+
+3. **Health check failures**:
+   - Ensure health check paths match your application endpoints (`/health`)
+   - Verify container ports are correctly exposed
+   - Check security groups allow health check traffic
+
 ### Useful Commands:
 - **Check service status**: ECS Console → Services
 - **View logs**: CloudWatch Console → Log groups
 - **Test connectivity**: Use ALB DNS name in browser
 - **Monitor metrics**: CloudWatch Console → Metrics
+
+### Target Group Configuration Summary:
+| Target Group | Port | Health Check Path | Protocol |
+|--------------|------|-------------------|----------|
+| Frontend-Target-Group | 80 | `/health` | HTTP |
+| Backend-Target-Group | 4000 | `/health` | HTTP |
+
+### ALB Listener Rules Summary:
+| Priority | Path | Target Group |
+|----------|------|--------------|
+| 100 | `/api/*` | Backend-Target-Group |
+| Default | All other paths | Frontend-Target-Group |
 
 ---
 
