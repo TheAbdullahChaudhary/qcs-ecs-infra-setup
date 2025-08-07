@@ -215,8 +215,7 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 1. **ECS Console** → Clusters → Create cluster
 2. **Configure**:
    - **Cluster name**: `3-tier-ecs-cluster`
-   - **VPC**: Select `ecs-vpc`
-   - **Networking**: VPC only
+   - **Note:** In the new ECS Console, you **do not select a VPC at this step**. The cluster is just a logical grouping. You will select the VPC and subnets when you create each ECS service.
 3. **Click "Create"**
 
 ---
@@ -413,7 +412,7 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **Number of tasks**: 1
    - **Deployment type**: Service
 3. **Networking**:
-   - **VPC**: Select `ecs-vpc`
+   - **VPC**: **Select your VPC here** (e.g., `ecs-vpc`)
    - **Subnets**: Select both private subnets
    - **Security groups**: Select `ecs-database-sg`
    - **Auto-assign public IP**: Disabled
@@ -430,7 +429,7 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **Service name**: `ecs-backend-service`
    - **Number of tasks**: 2
 2. **Networking**:
-   - **VPC**: Select `ecs-vpc`
+   - **VPC**: **Select your VPC here** (e.g., `ecs-vpc`)
    - **Subnets**: Select both private subnets
    - **Security groups**: Select `ecs-backend-sg`
    - **Auto-assign public IP**: Disabled
@@ -449,7 +448,7 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
    - **Service name**: `ecs-frontend-service`
    - **Number of tasks**: 2
 2. **Networking**:
-   - **VPC**: Select `ecs-vpc`
+   - **VPC**: **Select your VPC here** (e.g., `ecs-vpc`)
    - **Subnets**: Select both public subnets
    - **Security groups**: Select `ecs-frontend-sg`
    - **Auto-assign public IP**: Enabled
