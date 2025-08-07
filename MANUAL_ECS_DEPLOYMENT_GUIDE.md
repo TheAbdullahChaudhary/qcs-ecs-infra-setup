@@ -244,6 +244,13 @@ This guide provides step-by-step instructions to deploy your 3-tier application 
 
 ## Phase 7: Service Discovery Setup
 
+### Service Discovery and ECS: Correct Order
+To enable DNS-based service discovery in ECS, follow this order:
+1. **Create a namespace** in AWS Cloud Map (e.g., `ecs.internal`).
+2. **Register a service** in the namespace (e.g., `ecs-database-service`).
+3. **Create ECS task definitions** for your application components (database, backend, frontend).
+4. **Create ECS services** in ECS, referencing the Cloud Map service for service discovery. When ECS tasks are launched, they are automatically registered with the Cloud Map service and become discoverable by DNS name.
+
 ### What is a Namespace?
 A namespace in AWS Cloud Map is a logical container for service names. It enables ECS services to discover and communicate with each other using DNS names (e.g., `ecs-database-service.ecs.internal`). This is essential for dynamic environments like ECS, where IP addresses change frequently. By creating a namespace, you enable reliable, DNS-based service discovery for your application components.
 
@@ -346,6 +353,9 @@ An ALB distributes incoming application traffic across multiple ECS tasks (conta
 
 ## Phase 9: ECS Task Definitions
 
+### Task Definitions and Service Discovery
+You must create your ECS task definitions before you can launch ECS services. The ECS service will use the task definition and, if configured, will register running tasks with the Cloud Map service for DNS-based discovery.
+
 ### What is a Task Definition?
 A task definition is the blueprint for your containerized application. It specifies the Docker image, environment variables, ports, resource requirements, IAM roles, and other settings needed to run your application in ECS. You must create a task definition before you can launch an ECS service.
 
@@ -437,6 +447,9 @@ A task definition is the blueprint for your containerized application. It specif
 ---
 
 ## Phase 10: ECS Services
+
+### Note on Service Discovery Registration
+When you create an ECS service and enable service discovery, ECS will automatically register the running tasks with the Cloud Map service you created earlier. This makes your tasks discoverable by DNS name (e.g., `ecs-database-service.ecs.internal`).
 
 ### What is an ECS Service?
 An ECS service is responsible for running and maintaining a specified number of instances (tasks) of a task definition. It ensures that the desired number of tasks are always running, restarts failed tasks, and integrates with load balancers and service discovery. When you create a service, you specify the task definition, networking, and (optionally) service discovery and load balancing settings.
